@@ -1,0 +1,205 @@
+import {
+    RequestDeadlockProfileRoute,
+    RequestDeadlockProfile
+} from "./modules/RequestDeadlockProfile";
+
+import { gc } from "./framework/gc";
+
+import {
+    RequestDeadlockGetMatchMetaDataRoute,
+    requestDeadlockGetMatchMetaData
+} from "./modules/RequestDeadlockGetMatchMetaData";
+
+import {
+    ClientHelloRoute,
+    requestClientHello
+} from "./modules/RequestClientHello";
+
+import {
+    RequestDeadlockGetAccountStatsRoute,
+    requestDeadlockGetAccountStats
+} from "./modules/RequestDeadlockGetAccountStats";
+
+import {
+    RequestDeadlockHeroReleaseVoteTallyRoute,
+    requestDeadlockHeroReleaseVoteTally
+} from "./modules/RequestDeadlockHeroReleaseVoteTally";
+
+import {
+    RequestDeadlockGetRankDataRoute,
+    requestDeadlockGetRankData
+} from "./modules/RequestDeadlockGetRankData";
+
+import {
+    RequestDeadlockGetFriendGameStatusRoute,
+    requestDeadlockGetFriendGameStatus
+} from "./modules/RequestDeadlockGetFriendGameStatus";
+
+import {
+    RequestDeadlockGetProfileCardRoute,
+    requestDeadlockGetProfileCard
+} from "./modules/RequestDeadlockGetProfileCard";
+
+import {
+    RequestDeadlockGetMatchHistoryRoute,
+    requestDeadlockGetMatchHistory
+} from "./modules/RequestDeadlockGetMatchHistory";
+
+import {
+    RequestDeadlockGrantForumAccessRoute,
+    requestDeadlockGrantForumAccess
+} from "./modules/RequestDeadlockGrantForumAccess";
+
+import {
+    RequestDeadlockGetAccountMatchReportsRoute,
+    requestDeadlockGetAccountMatchReports
+} from "./modules/RequestDeadlockGetAccountMatchReports";
+
+import {
+    RequestGameServerHelloRoute,
+    requestGameServerHello
+} from "./modules/RequestGameServerHello.ts";
+
+import {
+    RequestDeadlockSubmitPlaytestUserRoute,
+    requestDeadlockSubmitPlaytestUser
+} from "./modules/RequestDeadlockSubmitPlaytestUser.ts";
+
+import {
+    RequestDeadlockStartRankedIntervalRoute,
+    requestDeadlockStartRankedInterval
+} from "./modules/RequestDeadlockStartRankedInterval.ts";
+
+import {
+    RequestDeadlockPartyCreateRoute,
+    requestDeadlockPartyCreate
+} from "./modules/RequestDeadlockPartyCreate";
+
+import {
+    RequestDeadlockGetActiveMatchesRoute,
+    requestDeadlockGetActiveMatches
+} from "./modules/RequestDeadlockGetActiveMatches";
+
+import {
+    RequestDeadlockStartMatchmakingRoute,
+    requestDeadlockStartMatchmaking
+} from "./modules/RequestDeadlockStartMatchmaking";
+
+import {
+    RequestDeadlockStopMatchmakingRoute,
+    requestDeadlockStopMatchmaking
+} from "./modules/RequestDeadlockStopMatchmaking";
+
+import {
+    RequestDeadlockUpdateRosterRoute,
+    requestDeadlockUpdateRoster
+} from "./modules/RequestDeadlockUpdateRoster";
+import { RequestDeadlockIsInMatchmakingRoute, requestDeadlockIsInMatchmaking } from "./modules/RequestDeadlockIsInMatchmaking";
+import { RequestDeadlockPartySetModeRoute, requestDeadlockPartySetMode } from "./modules/RequestDeadlockPartySetMode";
+
+export function handle(): boolean {
+    gc.on(
+        RequestDeadlockPartyCreateRoute,
+        requestDeadlockPartyCreate
+    );
+
+    gc.on(
+        RequestDeadlockStartRankedIntervalRoute,
+        requestDeadlockStartRankedInterval
+    );
+
+    gc.on(
+        RequestDeadlockSubmitPlaytestUserRoute,
+        requestDeadlockSubmitPlaytestUser
+    );
+
+    gc.on(
+        ClientHelloRoute,
+        requestClientHello
+    );
+
+    gc.on(
+        RequestDeadlockGetAccountStatsRoute,
+        requestDeadlockGetAccountStats
+    );
+
+    gc.on(
+        RequestDeadlockHeroReleaseVoteTallyRoute,
+        requestDeadlockHeroReleaseVoteTally
+    );
+
+    gc.on(
+        RequestDeadlockGetRankDataRoute,
+        requestDeadlockGetRankData
+    );
+
+    gc.on(
+        RequestDeadlockGetFriendGameStatusRoute,
+        requestDeadlockGetFriendGameStatus
+    );
+
+    gc.on(
+        RequestDeadlockGetProfileCardRoute,
+        requestDeadlockGetProfileCard
+    );
+
+    gc.on(
+        RequestDeadlockGetMatchHistoryRoute,
+        requestDeadlockGetMatchHistory
+    );
+
+    gc.on(
+        RequestDeadlockGrantForumAccessRoute,
+        requestDeadlockGrantForumAccess
+    );
+
+    gc.on(
+        RequestDeadlockGetAccountMatchReportsRoute,
+        requestDeadlockGetAccountMatchReports
+    );
+
+    gc.on(
+        RequestGameServerHelloRoute,
+        requestGameServerHello
+    );
+
+    gc.on(
+        RequestDeadlockGetActiveMatchesRoute,
+        requestDeadlockGetActiveMatches
+    );
+
+    gc.on(
+        RequestDeadlockGetMatchMetaDataRoute,
+        requestDeadlockGetMatchMetaData
+    );
+
+    gc.on(
+        RequestDeadlockStartMatchmakingRoute,
+        requestDeadlockStartMatchmaking
+    );
+
+    gc.on(
+        RequestDeadlockStopMatchmakingRoute,
+        requestDeadlockStopMatchmaking
+    );
+
+    gc.on(
+        RequestDeadlockUpdateRosterRoute,
+        requestDeadlockUpdateRoster
+    );
+
+    gc.on(
+        RequestDeadlockIsInMatchmakingRoute,
+        requestDeadlockIsInMatchmaking
+    );
+
+    gc.on(
+        RequestDeadlockPartySetModeRoute,
+        requestDeadlockPartySetMode
+    );
+
+    return gc.dispatch();
+}
+
+export function tick(): void {
+}

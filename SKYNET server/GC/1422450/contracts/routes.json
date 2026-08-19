@@ -1,0 +1,122 @@
+{
+  "GetMatchHistory": {
+    "requestMessage": "GetMatchHistory",
+    "requestProto": "CMsgClientToGCGetMatchHistory",
+    "responseMessage": "GetMatchHistoryResponse",
+    "responseProto": "CMsgClientToGCGetMatchHistoryResponse"
+  },
+  "RequestDeadlockMatchHistory": {
+    "request": "CMsgClientToGCGetMatchHistory",
+    "requestId": 9112,
+    "response": "CMsgClientToGCGetMatchHistoryResponse",
+    "responseId": 9113
+  },
+  "RequestClientHello": {
+    "requestMessage": "k_EMsgClientToGCHello",
+    "requestProto": "CMsgClientHello",
+    "requestId": 4006,
+    "responseMessage": "k_EMsgGCToClientHello",
+    "responseProto": "CMsgClientWelcome",
+    "responseId": 4005
+  },
+  "RequestDeadlockGetAccountStats": {
+    "request": "CMsgClientToGCGetAccountStats",
+    "requestId": 9164,
+    "response": "CMsgClientToGCGetAccountStatsResponse",
+    "responseId": 9165
+  },
+  "RequestDeadlockHeroReleaseVoteTally": {
+    "request": "CMsgClientToGCRequestHeroReleaseVoteTally",
+    "requestId": 9280,
+    "response": "CMsgGCToClientUpdateHeroReleaseVoteTally",
+    "responseId": 9281
+  },
+  "RequestGameServerHello": {
+    "requestMessage": "k_EMsgGCServerHello",
+    "requestProto": "CMsgClientHello",
+    "requestId": 4007,
+    "responseMessage": "k_EMsgGCServerWelcome",
+    "responseProto": "CMsgClientWelcome",
+    "responseId": 4005
+  },
+  "RequestDeadlockSubmitPlaytestUser": {
+    "requestMessage": "k_EMsgClientToGCSubmitPlaytestUser",
+    "requestProto": "CMsgClientToGCSubmitPlaytestUser",
+    "requestId": 9189,
+    "responseMessage": "k_EMsgClientToGCSubmitPlaytestUserResponse",
+    "responseProto": "CMsgClientToGCSubmitPlaytestUserResponse",
+    "responseId": 9190
+  },
+  "RequestDeadlockStartRankedInterval": {
+    "requestMessage": "k_EMsgClientToGCStartRankedInterval",
+    "requestProto": "CMsgClientToGCStartRankedInterval",
+    "requestId": 9289,
+    "responseMessage": "k_EMsgClientToGCStartRankedIntervalResponse",
+    "responseProto": "CMsgClientToGCStartRankedIntervalResponse",
+    "responseId": 9290
+  },
+  "RequestDeadlockPartyCreate": {
+    "requestMessage": "k_EMsgClientToGCPartyCreate",
+    "requestProto": "CMsgClientToGCPartyCreate",
+    "requestId": 9123,
+    "responseMessage": "k_EMsgClientToGCPartyCreateResponse",
+    "responseProto": "CMsgClientToGCPartyCreateResponse",
+    "responseId": 9124
+  },
+  "RequestDeadlockGetActiveMatches": {
+    "requestMessage": "k_EMsgClientToGCGetActiveMatches",
+    "requestProto": "CMsgClientToGCGetActiveMatches",
+    "requestId": 9203,
+    "responseMessage": "k_EMsgClientToGCGetActiveMatchesResponse",
+    "responseProto": "CMsgClientToGCGetActiveMatchesResponse",
+    "responseId": 9204
+  },
+  "RequestDeadlockGetMatchMetaData": {
+    "requestMessage": "k_EMsgClientToGCGetMatchMetaData",
+    "requestProto": "CMsgClientToGCGetMatchMetaData",
+    "requestId": 9167,
+    "responseMessage": "k_EMsgClientToGCGetMatchMetaDataResponse",
+    "responseProto": "CMsgClientToGCGetMatchMetaDataResponse",
+    "responseId": 9168
+  },
+  "RequestDeadlockStartMatchmaking": {
+    "requestMessage": "k_EMsgClientToGCStartMatchmaking",
+    "requestProto": "CMsgClientToGCStartMatchmaking",
+    "requestId": 9010,
+    "responseMessage": "k_EMsgClientToGCStartMatchmakingResponse",
+    "responseProto": "CMsgClientToGCStartMatchmakingResponse",
+    "responseId": 9011
+  },
+  "RequestDeadlockStopMatchmaking": {
+    "requestMessage": "k_EMsgClientToGCStopMatchmaking",
+    "requestProto": "CMsgClientToGCStopMatchmaking",
+    "requestId": 9012,
+    "responseMessage": "k_EMsgClientToGCStopMatchmakingResponse",
+    "responseProto": "CMsgClientToGCStopMatchmakingResponse",
+    "responseId": 9013
+  },
+  "RequestDeadlockUpdateRoster": {
+    "requestMessage": "k_EMsgClientToGCUpdateRoster",
+    "requestProto": "CMsgClientToGCUpdateRoster",
+    "requestId": 9026,
+    "responseMessage": "k_EMsgClientToGCUpdateRosterResponse",
+    "responseProto": "CMsgClientToGCUpdateRosterResponse",
+    "responseId": 9027
+  },
+  "RequestDeadlockIsInMatchmaking": {
+    "requestMessage": "k_EMsgClientToGCIsInMatchmaking",
+    "requestProto": "CMsgClientToGCIsInMatchmaking",
+    "requestId": 9017,
+    "responseMessage": "k_EMsgClientToGCIsInMatchmakingResponse",
+    "responseProto": "CMsgClientToGCIsInMatchmakingResponse",
+    "responseId": 9018
+  },
+  "RequestDeadlockPartySetMode": {
+    "requestMessage": "k_EMsgClientToGCPartySetMode",
+    "requestProto": "CMsgClientToGCPartySetMode",
+    "requestId": 9207,
+    "responseMessage": "k_EMsgClientToGCPartySetModeResponse",
+    "responseProto": "CMsgClientToGCPartySetModeResponse",
+    "responseId": 9208
+  }
+}
