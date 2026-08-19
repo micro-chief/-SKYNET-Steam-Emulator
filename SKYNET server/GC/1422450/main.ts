@@ -1,4 +1,19 @@
 import {
+    RequestDeadlockPartySetReadyStateRoute,
+    requestDeadlockPartySetReadyState
+} from "./modules/RequestDeadlockPartySetReadyState";
+
+import {
+    RequestDeadlockPartyLeaveRoute,
+    requestDeadlockPartyLeave
+} from "./modules/RequestDeadlockPartyLeave";
+
+import {
+    RequestDeadlockPartyActionRoute,
+    requestDeadlockPartyAction
+} from "./modules/RequestDeadlockPartyAction";
+
+import {
     RequestDeadlockProfileRoute,
     RequestDeadlockProfile
 } from "./modules/RequestDeadlockProfile";
@@ -75,6 +90,7 @@ import {
     requestDeadlockPartyCreate
 } from "./modules/RequestDeadlockPartyCreate";
 
+
 import {
     RequestDeadlockGetActiveMatchesRoute,
     requestDeadlockGetActiveMatches
@@ -97,10 +113,35 @@ import {
 import { RequestDeadlockIsInMatchmakingRoute, requestDeadlockIsInMatchmaking } from "./modules/RequestDeadlockIsInMatchmaking";
 import { RequestDeadlockPartySetModeRoute, requestDeadlockPartySetMode } from "./modules/RequestDeadlockPartySetMode";
 
+import {
+    RequestDeadlockPartyStartMatchRoute,
+    requestDeadlockPartyStartMatch
+} from "./modules/RequestDeadlockPartyStartMatch";
+
 export function handle(): boolean {
     gc.on(
         RequestDeadlockPartyCreateRoute,
         requestDeadlockPartyCreate
+    );
+
+    gc.on(
+        RequestDeadlockPartyStartMatchRoute,
+        requestDeadlockPartyStartMatch
+    );
+
+    gc.on(
+        RequestDeadlockPartyActionRoute,
+        requestDeadlockPartyAction
+    );
+
+    gc.on(
+        RequestDeadlockPartyLeaveRoute,
+        requestDeadlockPartyLeave
+    );
+
+    gc.on(
+        RequestDeadlockPartySetReadyStateRoute,
+        requestDeadlockPartySetReadyState
     );
 
     gc.on(
@@ -118,20 +159,8 @@ export function handle(): boolean {
         requestClientHello
     );
 
-    gc.on(
-        RequestDeadlockGetAccountStatsRoute,
-        requestDeadlockGetAccountStats
-    );
 
-    gc.on(
-        RequestDeadlockHeroReleaseVoteTallyRoute,
-        requestDeadlockHeroReleaseVoteTally
-    );
 
-    gc.on(
-        RequestDeadlockGetRankDataRoute,
-        requestDeadlockGetRankData
-    );
 
     gc.on(
         RequestDeadlockGetFriendGameStatusRoute,
@@ -196,6 +225,21 @@ export function handle(): boolean {
     gc.on(
         RequestDeadlockPartySetModeRoute,
         requestDeadlockPartySetMode
+    );
+
+    gc.on(
+        RequestDeadlockGetAccountStatsRoute,
+        requestDeadlockGetAccountStats
+    );
+
+    gc.on(
+        RequestDeadlockGetRankDataRoute,
+        requestDeadlockGetRankData
+    );
+
+    gc.on(
+        RequestDeadlockHeroReleaseVoteTallyRoute,
+        requestDeadlockHeroReleaseVoteTally
     );
 
     return gc.dispatch();

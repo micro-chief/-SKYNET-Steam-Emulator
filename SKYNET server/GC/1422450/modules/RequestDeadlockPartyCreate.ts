@@ -18,6 +18,22 @@ const requestProto = {
 
 
 const PARTY_SO_TYPE_ID = 105;
+
+// === SKYNET_DEADLOCK_PARTY_SHARED_STATE ===
+
+let currentDeadlockPartyState: any =
+    null;
+
+export function getCurrentDeadlockPartyState(): any {
+    return currentDeadlockPartyState;
+}
+
+export function clearCurrentDeadlockPartyState(): void {
+    currentDeadlockPartyState =
+        null;
+}
+
+
 const responseProto = {
     name:
         "SKYNET.Server.GameCoordinator.Citadel.CMsgClientToGCPartyCreateResponse"
@@ -71,9 +87,26 @@ export function requestDeadlockPartyCreate(
      * Keep this separate from party_id.
      * Derive a compact 6-digit value from the newly generated partyId.
      */
+    // === SKYNET_JOIN_CODE_FROM_NOW_V1 ===
+    const joinCodeSeed =
+        now();
+
     const joinCode =
-        (partyId % 900000n) +
-        100000n;
+        (
+            joinCodeSeed %
+            900000
+        ) +
+        100000;
+
+    log(
+        "[9123-CODE] now=" +
+        joinCodeSeed
+    );
+
+    log(
+        "[9123-CODE] join_code=" +
+        joinCode
+    );
 
     const clientVersion =
         request.party_mm_info
@@ -234,222 +267,177 @@ export function requestDeadlockPartyCreate(
             true
     };
 
+    // === SKYNET_PARTY_CREATE_MODE_SPLIT_V1 ===
+
+    /*
+     * IMPORTANT:
+     *
+     * 9123 is used for BOTH:
+     *
+     *   - ordinary group / party creation
+     *   - custom/private match creation
+     *
+     * Do not make every Party a custom lobby.
+     *
+     * The reliable discriminator in our captures/request model is the
+     * actual presence of private_lobby_settings.
+     */
+    // === SKYNET_PARTY_CREATE_PRIVATE_FLAG_V2 ===
+    const isCustomMatch =
+        (
+            request.is_private_lobby ??
+            false
+        ) ===
+        true;
+
+    log(
+        "[9123-MODE] request.is_private_lobby=" +
+        (
+            request.is_private_lobby ??
+            false
+        )
+    );
+
+    log(
+        "[9123-MODE] private_lobby_settings.present=" +
+        (
+            request.private_lobby_settings !=
+            undefined
+        )
+    );
+
+    log(
+        "[9123-MODE] resolved=" +
+        (
+            isCustomMatch
+                ? "CUSTOM_MATCH"
+                : "NORMAL_PARTY"
+        )
+    );
+
+    log(
+        "[9123-MODE] private_lobby_settings.present=" +
+        isCustomMatch
+    );
+
+    log(
+        "[9123-MODE] request.is_private_lobby=" +
+        (
+            request.is_private_lobby ??
+            false
+        )
+    );
+
     const party: any = {
-        /*
-         * field 1
-         */
         party_id:
             partyId,
 
-        /*
-         * field 2
-         */
         members: [
             {
-                /*
-                 * field 1
-                 */
                 account_id:
                     ctx.accountId,
 
-                /*
-                 * field 2
-                 */
                 persona_name:
                     "gagaga",
 
-                /*
-                 * field 3
-                 *
-                 * Real capture:
-                 * Creator only.
-                 *
-                 * Admin  = 1
-                 * Creator = 2
-                 */
                 rights_flags:
-                    2,
+                    3,
 
-                /*
-                 * field 4 is_ready:
-                 * ABSENT in capture.
-                 */
+                is_ready:
+                    false,
 
-                /*
-                 * field 5
-                 *
-                 * Explicit Player = 0.
-                 */
                 player_type:
                     0,
 
-                /*
-                 * field 6
-                 */
                 compatibility_version:
                     clientVersion,
 
-                /*
-                 * field 7
-                 */
                 platform:
                     platform,
 
-                /*
-                 * field 8 team:
-                 * ABSENT in capture.
-                 */
-
-                /*
-                 * field 10
-                 */
                 permissions:
-                    2n,
+                    0n,
 
-                /*
-                 * field 11
-                 */
                 new_player_progress:
-                    30n,
+                    0n,
 
-                /*
-                 * field 12 owned_heroes:
-                 * ABSENT in capture.
-                 */
+                owned_heroes:
+                    [],
 
-                /*
-                 * field 13
-                 *
-                 * Explicit zero was present.
-                 */
                 low_priority_games_remaining:
-                    0,
-
-                /*
-                 * field 14
-                 *
-                 * Captured RankedScores:
-                 *
-                 * rank_type        = Normal
-                 * rank_interval    = 1
-                 * unlocked_heroes = 14,63,64
-                 * in_calibration  = true
-                 */
-                ranked_scores: [
-                    {
-                        rank_type:
-                            1,
-
-                        rank_interval:
-                            1,
-
-                        unlocked_heroes: [
-                            14,
-                            63,
-                            64
-                        ],
-
-                        in_calibration:
-                            true
-                    }
-                ]
+                    0
             }
         ],
 
-        /*
-         * invites:
-         * ABSENT in capture.
-         *
-         * left_members:
-         * ABSENT in capture.
-         */
+        invites:
+            [],
+
+        left_members:
+            [],
 
         /*
-         * field 6
+         * Ordinary groups may still have a join/invite code.
+         *
+         * A join code alone must NOT imply Custom Match.
          */
         join_code:
             joinCode,
 
-        /*
-         * field 7
-         *
-         * Real custom lobby capture = Hard.
-         */
-        bot_difficulty:
-            3,
-
-        /*
-         * field 9 = PrivateLobby
-         */
-        match_mode:
-            2,
-
-        /*
-         * field 10 = Normal
-         */
-        game_mode:
-            1,
-
-        /*
-         * field 12
-         *
-         * Explicit empty string was present.
-         */
         server_search_key:
+            request.server_search_key ??
             "",
 
-        /*
-         * field 13
-         *
-         * Explicit false was present.
-         */
-        is_high_skill_range_party:
+        chat_mode:
+            1,
+
+        region_mode:
+            regionMode,
+
+        desires_laning_together:
             false,
 
-        /*
-         * field 14
-         *
-         * Real capture = TeamChat.
-         */
-        chat_mode:
-            2,
-
-        /*
-         * field 15
-         *
-         * Real capture = Russia.
-         */
-        region_mode:
-            4,
-
-        /*
-         * field 16
-         */
-        is_private_lobby:
-            true,
-
-        /*
-         * field 17
-         */
-        private_lobby_settings:
-            privateLobbySettings,
-
-        /*
-         * field 18 desires_laning_together:
-         * ABSENT in capture.
-         */
-
-        /*
-         * field 19 = Casual.
-         */
         mm_preference:
-            1
+            mmPreference,
 
-        /*
-         * field 21 hideout_search_key:
-         * ABSENT in capture.
-         */
+        hideout_search_key:
+            request.hideout_search_key ??
+            ""
     };
+
+    /*
+     * ============================================================
+     * CUSTOM MATCH ONLY
+     * ============================================================
+     *
+     * These properties MUST NOT even exist on an ordinary party
+     * object. In particular, do not serialize an empty
+     * private_lobby_settings message for normal group creation.
+     */
+    if (isCustomMatch) {
+        party.is_private_lobby =
+            true;
+
+        party.match_mode =
+            2;
+
+        party.game_mode =
+            gameMode;
+
+        party.bot_difficulty =
+            botDifficulty;
+
+        party.private_lobby_settings =
+            request.private_lobby_settings;
+
+        log(
+            "[9123-MODE] mode=CUSTOM_MATCH"
+        );
+    }
+    else {
+        log(
+            "[9123-MODE] mode=NORMAL_PARTY"
+        );
+    }
 
 
 // === SKYNET_PARTY_SO_DIAGNOSTICS_BEGIN ===
@@ -806,7 +794,52 @@ export function requestDeadlockPartyCreate(
     // === SKYNET_PARTY_SO_DIAGNOSTICS_END ===
 
 
-    const partyBytes =
+        // === SKYNET_PARTY_UINT32_SENTINEL_NORMALIZATION ===
+    //
+    // Valve declares both fields as uint32.
+    //
+    // Our local lobby model uses -1 as an internal "unassigned" sentinel.
+    // Convert it to UINT32_MAX only at the protobuf boundary.
+    //
+    if (
+        party.members.length > 0 &&
+        party.members[0].team < 0
+    ) {
+        party.members[0].team =
+            4294967295;
+    }
+
+    if (
+        party.private_lobby_settings &&
+        party.private_lobby_settings.min_roster_size < 0
+    ) {
+        party.private_lobby_settings.min_roster_size =
+            4294967295;
+    }
+
+    log(
+        "[9123-PARTY-SO] protobuf.member[0].team=" +
+        party.members[0].team
+    );
+
+    if (
+        party.private_lobby_settings
+    ) {
+        log(
+            "[9123-PARTY-SO] protobuf.private.min_roster_size=" +
+            party.private_lobby_settings.min_roster_size
+        );
+    }
+
+    // === SKYNET_DEADLOCK_PARTY_STATE_CAPTURE ===
+    //
+    // Keep the exact object accepted by CSOCitadelParty encoding.
+    // PartyAction mutates this same object and emits it through SO 26.
+    //
+    currentDeadlockPartyState =
+        party;
+
+const partyBytes =
         encodeProto(
             "SKYNET.Server.GameCoordinator.Citadel.CSOCitadelParty",
             party

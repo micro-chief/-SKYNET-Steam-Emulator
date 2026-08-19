@@ -1,0 +1,17 @@
+{
+  "appId": 1422450,
+  "name": "Deadlock",
+  "entryPoint": "main.ts",
+  "protoContracts": {
+    "sources": [
+      {
+        "assembly": "server"
+      }
+    ]
+  },
+  "typeScript": {
+    "generatedContracts": "generated/protobuf.ts",
+    "extraMessageIds": "contracts/extra-message-ids.json",
+    "routes": "contracts/routes.json"
+  }
+}

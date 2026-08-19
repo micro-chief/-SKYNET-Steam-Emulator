@@ -357,6 +357,8 @@ export const EGCCitadelClientMessages = {
     k_EMsgClientToGCIsInMatchmakingResponse: 9018,
     k_EMsgClientToGCPartySetMode: 9207,
     k_EMsgClientToGCPartySetModeResponse: 9208,
+    k_EMsgClientToGCPartyStartMatch: 9131,
+    k_EMsgClientToGCPartyStartMatchResponse: 9132,
 } as const;
 
 
@@ -1093,3 +1095,60 @@ export interface CMsgClientToGCPartySetModeResponse {
 
 // === DEADLOCK_RUNTIME_PROTO_ROUTES_END ===
 
+
+
+// ============================================================================
+// Deadlock PartyAction
+// ============================================================================
+
+export interface CMsgClientToGCPartyAction {
+    readonly party_id?: bigint;
+    readonly target_account_id?: number;
+    readonly action_id?: number;
+    readonly uint_value?: bigint;
+    readonly bool_value?: boolean;
+}
+
+export interface CMsgClientToGCPartyActionResponse {
+    readonly result?: number;
+}
+
+export const CMsgClientToGCPartyAction_EAction = {
+    KickUser: 1,
+    CancelInvite: 2,
+    CancelFindMatch: 3,
+    SetReady: 4,
+    SetPlayerType: 5,
+    SetBotDifficulty: 6,
+    EnablePartyCode: 7,
+    SetMemberTeam: 8
+} as const;
+
+export const CMsgClientToGCPartyActionResponse_EResponse = {
+    InternalError: 0,
+    Success: 1,
+    InvalidPartyId: 2,
+    InvalidPermissions: 3,
+    InvalidTarget: 4,
+    InvalidValue: 5,
+    InMatchMaking: 6,
+    InMatch: 7,
+    Disabled: 8,
+    TooBusy: 9,
+    RateLimited: 10
+} as const;
+
+
+// ============================================================================
+// 9131 -> 9132 : PartyStartMatch
+// ============================================================================
+
+export interface CMsgClientToGCPartyStartMatch {
+    party_id?: bigint;
+}
+
+
+export interface CMsgClientToGCPartyStartMatchResponse {
+    result?: number;
+    account_id?: number;
+}

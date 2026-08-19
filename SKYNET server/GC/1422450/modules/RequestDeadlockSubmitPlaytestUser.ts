@@ -34,24 +34,46 @@ export const RequestDeadlockSubmitPlaytestUserRoute = {
 >;
 
 export function requestDeadlockSubmitPlaytestUser(
-    ctx: HandlerContext<
-        CMsgClientToGCSubmitPlaytestUser,
-        CMsgClientToGCSubmitPlaytestUserResponse
-    >,
+    ctx: any
 ): boolean {
-    const location =
-        ctx.request.location ?? "";
+    // === SKYNET_SUBMIT_PLAYTEST_USER_9189_V1 ===
 
     const targetAccountId =
-        ctx.request.target_account_id ?? 0;
+        ctx.request.target_account_id ??
+        0;
 
-    void location;
-    void targetAccountId;
+    const location =
+        ctx.request.location ??
+        "";
 
+    log(
+        "[9189] target_account_id=" +
+        targetAccountId
+    );
+
+    log(
+        "[9189] location='" +
+        location +
+        "'"
+    );
+
+    /*
+     * Official capture response is two protobuf bytes.
+     *
+     *   08 01
+     *
+     * -> response = 1
+     *
+     * Treat as successful local submission.
+     */
     ctx.reply({
         response:
-            CMsgClientToGCSubmitPlaytestUserResponseEResponse.eResponse_Success,
+            1
     });
+
+    log(
+        "[9189] response=1"
+    );
 
     return true;
 }

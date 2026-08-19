@@ -683,7 +683,28 @@ public sealed class GameCoordinatorProtoCodec
             property.Name,
             SnakeToCamel(property.Name)
         };
-        return aliases.Distinct(StringComparer.Ordinal).ToList();
+
+        // Preserve the exact protobuf field name as a valid TypeScript alias.
+        //
+        // Proto handlers are generated/written against .proto names such as:
+        //   account_id
+        //   current_rank_confidence
+        //   vote_round_to_tally
+        //
+        // GetFieldName() intentionally converts those names to camelCase,
+        // so without the raw ProtoMember name TS objects using canonical
+        // protobuf field names are incorrectly rejected as "Unknown field".
+        var protoName =
+            property.GetCustomAttribute<ProtoMemberAttribute>()?.Name;
+
+        if (!string.IsNullOrWhiteSpace(protoName))
+        {
+            aliases.Add(protoName);
+        }
+
+        return aliases
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
     }
 
     private static string SnakeToCamel(string value)

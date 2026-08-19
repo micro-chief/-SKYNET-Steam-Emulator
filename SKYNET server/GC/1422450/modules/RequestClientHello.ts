@@ -246,100 +246,12 @@ export const requestClientHello =
         29,
         "CMsgSOCacheSubscribedUpToDate",
         {
-            version:
-                cache?.version ??
-                0n,
-
-            owner_soid: {
-                type:
-                    cache?.soid?.type ??
-                    1,
-
-                id:
-                    cache?.soid?.id ??
-                    ctx.steamId
-            },
-
-            service_id:
-                cache?.service_id ??
-                1,
-
-            service_list: [
-                0
-            ],
-
-            sync_version:
-                cache0?.version ??
-                cache?.version ??
-                0n
+            version: 0n
         }
     );
 
 
-ctx.send(
-        9019,
-        "SKYNET.Server.GameCoordinator.Citadel.CMsgGCToClientDevPlaytestStatus",
-        {
-            dev_available_servers:
-                16,
 
-            coop_bot_max_wait_s:
-                5,
-
-            is_mm_enabled:
-                true,
-
-            locked_heroes:
-                false,
-
-            party_shared_heroes:
-                true,
-
-            mm_pause_time:
-                0,
-
-            valid_client_versions: [
-                request.version ?? 1
-            ],
-
-            active_match_count:
-                1,
-
-            roster_non_limited_heroes:
-                30,
-
-            matches_per_priority_token:
-                1,
-
-            active_ranked_modes: [
-                {
-                    rank_type:
-                        0,
-
-                    rank_interval:
-                        1,
-
-                    leaderboard_tiers: [
-                        {
-                            leaderboard_rank:
-                                1,
-
-                            required_progress:
-                                0
-                        },
-
-                        {
-                            leaderboard_rank:
-                                100,
-
-                            required_progress:
-                                100
-                        }
-                    ]
-                }
-            ]
-        }
-    );
 };
 
 export const createRequestClientHelloHandler =
