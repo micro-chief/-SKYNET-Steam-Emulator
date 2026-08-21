@@ -58,6 +58,7 @@ builder.Services.AddSingleton<EncryptedAppTicketKeyStore>();
 builder.Services.AddSingleton<EncryptedAppTicketService>();
 builder.Services.AddSingleton<DotaDedicatedServerSupervisor>();
 builder.Services.AddSingleton<DotaDB>();
+builder.Services.AddSingleton<DeadlockDB>();
 builder.Services.AddSingleton<DedicatedServerService>();
 builder.Services.AddSingleton<GameCoordinatorScriptPlugin>();
 builder.Services.AddSingleton<IGameCoordinatorPlugin>(sp => sp.GetRequiredService<GameCoordinatorScriptPlugin>());
@@ -78,6 +79,7 @@ builder.Services.AddHostedService<SKYNET_server.Services.Networking.SdrRelayServ
 
 var app = builder.Build();
 
+
 // Prepare split SQLite stores before any facade touches them. app.db and older
 // per-feature DBs are migration inputs only and are archived on successful copy.
 {
@@ -95,6 +97,52 @@ var app = builder.Build();
 }
 
 _ = app.Services.GetRequiredService<DotaDB>();
+_ = app.Services.GetRequiredService<DeadlockDB>();
+
+// SKYNET_DEADLOCK_DB_HOST_BRIDGE_V3
+var deadlockGcDb =
+    app.Services.GetRequiredService<DeadlockDB>();
+
+// SKYNET_DEADLOCK_AUTO_ENSURE_PLAYER_V2
+DeadlockGcRuntimeServices.EnsurePlayerProvider =
+    (accountId, steamId, personaName) =>
+    {
+        deadlockGcDb.EnsurePlayer(
+            steamId,
+            accountId,
+            personaName
+        );
+
+        return true;
+    };
+
+DeadlockGcRuntimeServices.AccountStatsJsonProvider =
+    accountId =>
+        deadlockGcDb.GetAccountStats(
+            accountId
+        );
+
+        // SKYNET_DEADLOCK_RANKED_DB_PROVIDER_WIRE_V1
+        DeadlockGcRuntimeServices.RankedSocacheJsonProvider =
+            accountId =>
+                deadlockGcDb.GetRankedSocacheSnapshot(
+                    accountId
+                );
+
+
+// SKYNET_DEADLOCK_MATCH_HISTORY_DB_PROVIDER_WIRE_V1
+DeadlockGcRuntimeServices.MatchHistoryJsonProvider =
+    accountId =>
+        deadlockGcDb.GetMatchHistory(
+            accountId
+        );
+
+DeadlockGcRuntimeServices.HeroStatsJsonProvider =
+    accountId =>
+        deadlockGcDb.GetHeroStats(
+            accountId
+        );
+
 _ = app.Services.GetRequiredService<DedicatedServerService>();
 
 app.Lifetime.ApplicationStopping.Register(() =>

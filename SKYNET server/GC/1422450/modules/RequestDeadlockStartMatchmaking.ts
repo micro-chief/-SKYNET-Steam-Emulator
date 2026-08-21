@@ -15,7 +15,7 @@ export const RequestDeadlockStartMatchmakingRoute: Route = {
 
     request: {
         name:
-            "CMsgClientToGCStartMatchmaking"
+            "SKYNET.Server.GameCoordinator.Citadel.CMsgClientToGCStartMatchmaking"
     },
 
     responseId:
@@ -24,7 +24,7 @@ export const RequestDeadlockStartMatchmakingRoute: Route = {
 
     response: {
         name:
-            "CMsgClientToGCStartMatchmakingResponse"
+            "SKYNET.Server.GameCoordinator.Citadel.CMsgClientToGCStartMatchmakingResponse"
     }
 };
 
@@ -44,6 +44,111 @@ export const requestDeadlockStartMatchmaking = (
 
     const matchInfo =
         request.match_info;
+
+    // === SKYNET_9010_MATCHMAKING_TRACE_V2_BEGIN ===
+
+    log(
+        "[9010] ========================================"
+    );
+
+    log(
+        "[9010] client_version=" +
+        clientVersion
+    );
+
+    log(
+        "[9010] client_platform=" +
+        clientPlatform
+    );
+
+    log(
+        "[9010] pgi_verified=" +
+        (
+            request.pgi_verified ??
+            false
+        )
+    );
+
+    if (
+        matchInfo
+    ) {
+        log(
+            "[9010] match_info.present=true"
+        );
+
+        log(
+            "[9010] match_mode=" +
+            (
+                matchInfo.match_mode ??
+                0
+            )
+        );
+
+        log(
+            "[9010] game_mode=" +
+            (
+                matchInfo.game_mode ??
+                0
+            )
+        );
+
+        log(
+            "[9010] bot_difficulty=" +
+            (
+                matchInfo.bot_difficulty ??
+                0
+            )
+        );
+
+        log(
+            "[9010] region_mode=" +
+            (
+                matchInfo.region_mode ??
+                0
+            )
+        );
+
+        log(
+            "[9010] mm_preference=" +
+            (
+                matchInfo.mm_preference ??
+                0
+            )
+        );
+
+        log(
+            "[9010] prefer_solo_only=" +
+            (
+                matchInfo.prefer_solo_only ??
+                false
+            )
+        );
+
+        log(
+            "[9010] server_search_key='" +
+            (
+                matchInfo.server_search_key ??
+                ""
+            ) +
+            "'"
+        );
+
+        log(
+            "[9010] server_command_string='" +
+            (
+                matchInfo.server_command_string ??
+                ""
+            ) +
+            "'"
+        );
+    }
+    else {
+        log(
+            "[9010] match_info.present=false"
+        );
+    }
+
+    // === SKYNET_9010_MATCHMAKING_TRACE_V2_END ===
 
     const pingTimes =
         request.ping_times;

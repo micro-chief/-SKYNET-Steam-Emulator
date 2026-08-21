@@ -1,65 +1,71 @@
-import { HandlerContext } from "../framework/gc";
-
 import {
-    CMsgClientToGCGetMatchMetaData,
-    CMsgClientToGCGetMatchMetaDataResponse,
-    CMsgClientToGCGetMatchMetaDataResponse_EResult,
-    EGCCitadelClientMessages,
-    GcRoute,
-    ProtoDescriptor,
-} from "../generated/protobuf";
+    Route
+} from "../framework/gc";
 
-const requestProto = {
-    name: "SKYNET.Server.GameCoordinator.Citadel.CMsgClientToGCGetMatchMetaData",
-} as ProtoDescriptor<CMsgClientToGCGetMatchMetaData>;
+// SKYNET_DEADLOCK_MATCH_METADATA_V2_OFFICIAL_SHAPE
 
-const responseProto = {
-    name: "SKYNET.Server.GameCoordinator.Citadel.CMsgClientToGCGetMatchMetaDataResponse",
-} as ProtoDescriptor<CMsgClientToGCGetMatchMetaDataResponse>;
+export const RequestDeadlockGetMatchMetaDataRoute: Route = {
+    requestId: 9167,
 
-export const RequestDeadlockGetMatchMetaDataRoute = {
-    requestId:
-        EGCCitadelClientMessages.k_EMsgClientToGCGetMatchMetaData,
+    request: {
+        name: "CMsgClientToGCGetMatchMetaData"
+    },
 
-    request: requestProto,
+    responseId: 9168,
 
-    responseId:
-        EGCCitadelClientMessages.k_EMsgClientToGCGetMatchMetaDataResponse,
+    response: {
+        name: "CMsgClientToGCGetMatchMetaDataResponse"
+    }
+};
 
-    response: responseProto,
-} as GcRoute<
-    CMsgClientToGCGetMatchMetaData,
-    CMsgClientToGCGetMatchMetaDataResponse
->;
+export const requestDeadlockGetMatchMetaData =
+(ctx: any): void => {
+    const request =
+        ctx.request;
 
-export function requestDeadlockGetMatchMetaData(
-    ctx: HandlerContext<
-        CMsgClientToGCGetMatchMetaData,
-        CMsgClientToGCGetMatchMetaDataResponse
-    >,
-): boolean {
-    const request = ctx.request;
+    log(
+        "[9167] GetMatchMetaData"
+    );
+
+    log(
+        "[9167] match_id=" +
+        request.match_id
+    );
 
     /*
-     * We do not have persisted replay metadata yet.
+     * Exact successful response shape observed in
+     * official Deadlock capture:
      *
-     * Return a structurally valid successful response so the client can
-     * continue its metadata flow. Preserve metadata_salt when supplied.
-     *
-     * Once deadlock.db is added, replay_salt/group/valid-through can be
-     * populated from the stored match record.
+     * 08 01
+     * 10 E9 C4 9F 49
+     * 18 C7 EB 94 97 06
+     * 20 B0 9C 86 D5 06
+     * 28 BB 01
+     * 30 E1 CE 97 D4 06
      */
     ctx.reply({
         result:
-            CMsgClientToGCGetMatchMetaDataResponse_EResult
-                .k_eResult_Success,
+            1,
 
-        replay_salt: 0,
-        metadata_salt: request.metadata_salt ?? 0,
-        replay_valid_through: 0,
-        replay_group_id: 0,
-        replay_processing_through: 0,
+        replay_salt:
+            153608809,
+
+        metadata_salt:
+            1659188679,
+
+        replay_valid_through:
+            1788972592,
+
+        replay_group_id:
+            187,
+
+        replay_processing_through:
+            1787160417
     });
 
-    return true;
-}
+    log(
+        "[9168] result=success full metadata response"
+    );
+};
+
+export default requestDeadlockGetMatchMetaData;

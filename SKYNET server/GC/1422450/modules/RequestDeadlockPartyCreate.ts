@@ -355,18 +355,31 @@ export function requestDeadlockPartyCreate(
                 platform:
                     platform,
 
-                permissions:
-                    0n,
+                permissions: 3n,
 
-                new_player_progress:
-                    0n,
+                new_player_progress: 30n,
 
                 owned_heroes:
                     [],
 
                 low_priority_games_remaining:
                     0
-            }
+            ,
+
+                // SKYNET_RANKED_PERMISSION_BIT_V1_PARTY_CREATE
+                // ECitadelAccountPermissionFlag.Ranked = 1
+                // previous=2, current=3 (2 | Ranked)
+
+
+                // SKYNET_RANKED_PARTY_ELIGIBILITY_OFFICIAL_CAPTURE_V3
+                ranked_scores: [
+                    {
+                        rank_type: 1,
+                        rank_interval: 1,
+                        unlocked_heroes: [14, 63, 64],
+                        in_calibration: true
+                    }
+                ],}
         ],
 
         invites:

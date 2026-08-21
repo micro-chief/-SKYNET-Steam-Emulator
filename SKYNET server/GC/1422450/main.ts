@@ -29,6 +29,11 @@ import {
     ClientHelloRoute,
     requestClientHello
 } from "./modules/RequestClientHello";
+// SKYNET_SOCACHE_REFRESH_28_IMPORT
+import {
+    SOCacheSubscriptionRefreshRoute,
+    requestSOCacheSubscriptionRefresh
+} from "./modules/RequestSOCacheSubscriptionRefresh";
 
 import {
     RequestDeadlockGetAccountStatsRoute,
@@ -157,6 +162,12 @@ export function handle(): boolean {
     gc.on(
         ClientHelloRoute,
         requestClientHello
+    );
+
+    // SKYNET_SOCACHE_REFRESH_28_REGISTER
+    gc.on(
+        SOCacheSubscriptionRefreshRoute,
+        requestSOCacheSubscriptionRefresh
     );
 
 

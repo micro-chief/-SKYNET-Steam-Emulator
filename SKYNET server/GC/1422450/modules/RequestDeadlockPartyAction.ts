@@ -580,6 +580,55 @@ function mutate(
         "'"
     );
 
+// === SKYNET_PARTY_ACTION_CANCEL_FIND_MATCH_V1_BEGIN ===
+    /*
+     * Private Lobby cancel-search uses PartyAction 9129,
+     * action_id=3.
+     *
+     * FindingMatch itself is represented by the optional
+     * CSOCitadelParty.match_making_start_time field.
+     *
+     * StartMatch sets the field.
+     * CancelFindMatch removes it.
+     *
+     * The normal RequestDeadlockPartyAction tail will then:
+     *
+     *   encode CSOCitadelParty
+     *   -> send 26 type_id=105
+     *   -> reply 9130 result=1
+     */
+    if (
+        actionId ===
+        PartyAction.CancelFindMatch
+    ) {
+        log(
+            "[9129-CANCEL-MM] ========================================"
+        );
+
+        log(
+            "[9129-CANCEL-MM] previous match_making_start_time=" +
+            (
+                party.match_making_start_time ??
+                0
+            )
+        );
+
+        party.match_making_start_time =
+            undefined;
+
+        log(
+            "[9129-CANCEL-MM] match_making_start_time=ABSENT"
+        );
+
+        log(
+            "[9129-CANCEL-MM] state=PRIVATE_LOBBY"
+        );
+
+        return true;
+    }
+
+// === SKYNET_PARTY_ACTION_CANCEL_FIND_MATCH_V1_END ===
+
     if (
         actionId ===
         PartyAction.SetPlayerType
@@ -805,9 +854,384 @@ function mutate(
         actionId ===
             PartyAction.ShuffleLanes
     ) {
+        // === SKYNET_CUSTOM_MATCH_SLOT_PERMUTATION_V11_BEGIN ===
+        /*
+         * Deadlock Custom Match PartyAction:
+         *
+         *   18 = swap teams
+         *   19 = shuffle/redistribute players
+         *   20 = shuffle lanes
+         *
+         * The existing handler already accepts these actions and
+         * publishes CSOCitadelParty through msg 26 afterwards.
+         *
+         * Therefore mutate ONLY match_slots here.
+         *
+         * Proven occupied slot from current lobby:
+         *   slot_id = 10
+         *
+         * Current working lobby layout is treated as:
+         *
+         *   10..15 = team A
+         *   20..25 = team B
+         *
+         * Special/spectator slots are preserved.
+         */
+
+        if (
+            party.private_lobby_settings ===
+            undefined
+        ) {
+            party.private_lobby_settings = {
+                match_slots: []
+            };
+        }
+
+        if (
+            party.private_lobby_settings.match_slots ===
+            undefined
+        ) {
+            party.private_lobby_settings.match_slots =
+                [];
+        }
+
+        const permutationSlots =
+            party.private_lobby_settings.match_slots;
+
         log(
-            "[9129] shuffle/swap accepted; slot permutation not implemented yet."
+            "[9129-PERMUTE] ========================================"
         );
+
+        log(
+            "[9129-PERMUTE] action_id=" +
+            actionId
+        );
+
+        log(
+            "[9129-PERMUTE] slots.count=" +
+            permutationSlots.length
+        );
+
+/*
+         * ------------------------------------------------------------
+         * 18 - SwapTeams
+         *
+         * Keep position inside the team:
+         *
+         *   10 <-> 20
+         *   11 <-> 21
+         *   ...
+         *   15 <-> 25
+         * ------------------------------------------------------------
+         */
+        if (
+            actionId ===
+            18
+        ) {
+            for (
+                let slotIndex =
+                    0;
+                slotIndex <
+                    permutationSlots.length;
+                slotIndex++
+            ) {
+                const slot =
+                    permutationSlots[
+                        slotIndex
+                    ];
+
+                const oldSlotId =
+                    slot.slot_id ??
+                    0;
+
+                let newSlotId =
+                    oldSlotId;
+
+                if (
+                    oldSlotId >=
+                        10 &&
+                    oldSlotId <=
+                        15
+                ) {
+                    newSlotId =
+                        oldSlotId +
+                        10;
+                }
+                else if (
+                    oldSlotId >=
+                        20 &&
+                    oldSlotId <=
+                        25
+                ) {
+                    newSlotId =
+                        oldSlotId -
+                        10;
+                }
+
+                slot.slot_id =
+                    newSlotId;
+
+                log(
+                    "[9129-PERMUTE] SWAP account_id=" +
+                    (
+                        slot.player_account_id ??
+                        0
+                    ) +
+                    " slot=" +
+                    oldSlotId +
+                    "->" +
+                    newSlotId
+                );
+            }
+        }
+
+/*
+         * ------------------------------------------------------------
+         * 19 - ShuffleLobby
+         *
+         * We intentionally avoid Math.random() for TypeSharp.
+         *
+         * The mapping is a rotation through all 12 playable slots.
+         * Every click therefore causes another valid permutation:
+         *
+         *   10..15 -> logical 0..5
+         *   20..25 -> logical 6..11
+         *   new = (old + 7) % 12
+         *
+         * +7 is coprime with 12, so repeated presses walk through
+         * every playable position without collisions.
+         * ------------------------------------------------------------
+         */
+        else if (
+            actionId ===
+            19
+        ) {
+            for (
+                let slotIndex =
+                    0;
+                slotIndex <
+                    permutationSlots.length;
+                slotIndex++
+            ) {
+                const slot =
+                    permutationSlots[
+                        slotIndex
+                    ];
+
+                const oldSlotId =
+                    slot.slot_id ??
+                    0;
+
+                let logicalIndex =
+                    -1;
+
+                if (
+                    oldSlotId >=
+                        10 &&
+                    oldSlotId <=
+                        15
+                ) {
+                    logicalIndex =
+                        oldSlotId -
+                        10;
+                }
+                else if (
+                    oldSlotId >=
+                        20 &&
+                    oldSlotId <=
+                        25
+                ) {
+                    logicalIndex =
+                        6 +
+                        (
+                            oldSlotId -
+                            20
+                        );
+                }
+
+                if (
+                    logicalIndex >=
+                    0
+                ) {
+                    const newLogicalIndex =
+                        (
+                            logicalIndex +
+                            7
+                        ) %
+                        12;
+
+                    let newSlotId =
+                        0;
+
+                    if (
+                        newLogicalIndex <
+                        6
+                    ) {
+                        newSlotId =
+                            10 +
+                            newLogicalIndex;
+                    }
+                    else {
+                        newSlotId =
+                            20 +
+                            (
+                                newLogicalIndex -
+                                6
+                            );
+                    }
+
+                    slot.slot_id =
+                        newSlotId;
+
+                    log(
+                        "[9129-PERMUTE] SHUFFLE_LOBBY account_id=" +
+                        (
+                            slot.player_account_id ??
+                            0
+                        ) +
+                        " slot=" +
+                        oldSlotId +
+                        "->" +
+                        newSlotId
+                    );
+                }
+                else {
+                    log(
+                        "[9129-PERMUTE] SHUFFLE_LOBBY preserve slot=" +
+                        oldSlotId
+                    );
+                }
+            }
+        }
+
+/*
+         * ------------------------------------------------------------
+         * 20 - ShuffleLanes
+         *
+         * Rotate position by one slot while keeping current team.
+         * ------------------------------------------------------------
+         */
+        else if (
+            actionId ===
+            20
+        ) {
+            for (
+                let slotIndex =
+                    0;
+                slotIndex <
+                    permutationSlots.length;
+                slotIndex++
+            ) {
+                const slot =
+                    permutationSlots[
+                        slotIndex
+                    ];
+
+                const oldSlotId =
+                    slot.slot_id ??
+                    0;
+
+                let newSlotId =
+                    oldSlotId;
+
+                if (
+                    oldSlotId >=
+                        10 &&
+                    oldSlotId <=
+                        15
+                ) {
+                    newSlotId =
+                        10 +
+                        (
+                            (
+                                oldSlotId -
+                                10 +
+                                1
+                            ) %
+                            6
+                        );
+                }
+                else if (
+                    oldSlotId >=
+                        20 &&
+                    oldSlotId <=
+                        25
+                ) {
+                    newSlotId =
+                        20 +
+                        (
+                            (
+                                oldSlotId -
+                                20 +
+                                1
+                            ) %
+                            6
+                        );
+                }
+
+                slot.slot_id =
+                    newSlotId;
+
+                log(
+                    "[9129-PERMUTE] SHUFFLE_LANES account_id=" +
+                    (
+                        slot.player_account_id ??
+                        0
+                    ) +
+                    " slot=" +
+                    oldSlotId +
+                    "->" +
+                    newSlotId
+                );
+            }
+        }
+
+/*
+         * Do NOT force member.team here.
+         *
+         * Existing proven state has:
+         *
+         *   match_slot.slot_id = 10
+         *   member.team         = null
+         *
+         * while the client already renders the player in the correct
+         * custom-lobby team. Therefore match_slots remains the source
+         * of truth for this experiment.
+         */
+
+        log(
+            "[9129-PERMUTE] mutation complete"
+        );
+
+        for (
+            let dumpIndex =
+                0;
+            dumpIndex <
+                permutationSlots.length;
+            dumpIndex++
+        ) {
+            const dumpSlot =
+                permutationSlots[
+                    dumpIndex
+                ];
+
+            log(
+                "[9129-PERMUTE] AFTER slot[" +
+                dumpIndex +
+                "].slot_id=" +
+                (
+                    dumpSlot.slot_id ??
+                    0
+                ) +
+                " account_id=" +
+                (
+                    dumpSlot.player_account_id ??
+                    0
+                )
+            );
+        }
+
+// === SKYNET_CUSTOM_MATCH_SLOT_PERMUTATION_V11_END ===
 
         return true;
     }

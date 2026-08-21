@@ -243,9 +243,74 @@ public sealed class GameCoordinatorScriptPlugin : IGameCoordinatorPlugin, IGameC
                 continue;
             }
 
-            throw new InvalidOperationException(
+            
+            // SKYNET_DEADLOCK_HOST_SERVICE_V1
+            if (string.Equals(
+                    serviceName,
+                    DeadlockGcRuntimeServices.HostServiceName,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                if (app.AppId != DeadlockGcRuntimeServices.AppId)
+                {
+                    throw new InvalidOperationException(
+                        $"GC app {app.AppId} is not authorized for host service '{serviceName}' in {app.ManifestPath}");
+                }
+
+                RegisterDeadlockHostFunctions(
+                    builder,
+                    dispatcher
+                );
+
+                continue;
+            }
+
+throw new InvalidOperationException(
                 $"GC app {app.AppId} declares unsupported host service '{serviceName}' in {app.ManifestPath}");
         }
+    }
+
+    // SKYNET_DEADLOCK_HOST_FUNCTIONS_V1
+    // SKYNET_DEADLOCK_HOST_FUNCTIONS_V1
+    private static void RegisterDeadlockHostFunctions(
+        TypeSharpRuntimeBuilder builder,
+        ScriptHostDispatcher dispatcher)
+    {
+        builder
+            .RegisterHostFunction(
+                "gc",
+                "deadlockAccountStats",
+                dispatcher.DeadlockAccountStats)
+            .RegisterHostFunction(
+                "gc",
+                "deadlockHeroStats",
+                dispatcher.DeadlockHeroStats)
+            .RegisterHostFunction(
+                "gc",
+                "deadlockEnsurePlayer",
+                dispatcher.DeadlockEnsurePlayer)
+            // SKYNET_DEADLOCK_RANKED_DB_HOST_REGISTER_V1
+            .RegisterHostFunction(
+                "gc",
+                "deadlockRankedSocache",
+                args =>
+                    dispatcher
+                        .RequireCurrent()
+                        .DeadlockRankedSocache(
+                            args
+                        )
+            )
+            // SKYNET_DEADLOCK_MATCH_HISTORY_DB_HOST_REGISTER_V1
+            .RegisterHostFunction(
+                "gc",
+                "deadlockMatchHistory",
+                args =>
+                    dispatcher
+                        .RequireCurrent()
+                        .DeadlockMatchHistory(
+                            args
+                        )
+            );
+
     }
 
     private static void RegisterDotaHostFunctions(TypeSharpRuntimeBuilder builder, ScriptHostDispatcher dispatcher)
@@ -474,6 +539,36 @@ internal sealed class ScriptHostDispatcher
     public TsValue? DotaSetItemStyle(TsValue[] args)
     {
         return RequireCurrent().DotaSetItemStyle(args);
+    }
+
+    // SKYNET_DEADLOCK_DB_DISPATCHER_V3
+
+    // SKYNET_DEADLOCK_AUTO_ENSURE_PLAYER_V2
+    public TsValue? DeadlockEnsurePlayer(
+        TsValue[] args)
+    {
+        return RequireCurrent()
+            .DeadlockEnsurePlayer(
+                args
+            );
+    }
+
+    public TsValue? DeadlockAccountStats(
+        TsValue[] args)
+    {
+        return RequireCurrent()
+            .DeadlockAccountStats(
+                args
+            );
+    }
+
+    public TsValue? DeadlockHeroStats(
+        TsValue[] args)
+    {
+        return RequireCurrent()
+            .DeadlockHeroStats(
+                args
+            );
     }
 
     public TsValue? DotaProfile(TsValue[] args)
@@ -1012,6 +1107,960 @@ internal sealed class ScriptExchangeHost
     public TsValue PersonaName() => TsValue.FromString(_context.PersonaName);
 
     public TsValue Now() => TsValue.FromInt64(DateTimeOffset.UtcNow.ToUnixTimeSeconds());
+
+
+
+    // SKYNET_DEADLOCK_MATCH_HISTORY_DB_HOST_V1
+    //
+    // Exposes an actual TypeSharp array to GC scripts.
+    // Scripts do not need JSON.parse().
+    public TsValue DeadlockMatchHistory(
+        TsValue[] args)
+    {
+        var accountId =
+            args.Length > 0
+                ? checked(
+                    (uint)ToInteger(
+                        args[0],
+                        "deadlockMatchHistory.accountId"
+                    )
+                )
+                : _context.AccountId;
+
+        if (
+            accountId == 0
+        )
+        {
+            accountId =
+                _context.AccountId;
+        }
+
+        var json =
+            DeadlockGcRuntimeServices
+                .MatchHistoryJsonProvider?
+                .Invoke(
+                    accountId
+                ) ??
+            "[]";
+
+        using var document =
+            System.Text.Json.JsonDocument.Parse(
+                string.IsNullOrWhiteSpace(
+                    json
+                )
+                    ? "[]"
+                    : json
+            );
+
+        var result =
+            new TsArray();
+
+        if (
+            document.RootElement.ValueKind !=
+            JsonValueKind.Array
+        )
+        {
+            return new TsArrayValue(
+                result
+            );
+        }
+
+        static long ReadInt64(
+            JsonElement element,
+            string name,
+            long fallback = 0)
+        {
+            if (
+                element.ValueKind !=
+                JsonValueKind.Object
+            )
+            {
+                return fallback;
+            }
+
+            if (
+                !element.TryGetProperty(
+                    name,
+                    out var property
+                )
+            )
+            {
+                return fallback;
+            }
+
+            if (
+                property.ValueKind ==
+                    JsonValueKind.Number &&
+                property.TryGetInt64(
+                    out var number
+                )
+            )
+            {
+                return number;
+            }
+
+            if (
+                property.ValueKind ==
+                    JsonValueKind.String &&
+                long.TryParse(
+                    property.GetString(),
+                    out var parsed
+                )
+            )
+            {
+                return parsed;
+            }
+
+            return fallback;
+        }
+
+        static int ReadInt32(
+            JsonElement element,
+            string name,
+            int fallback = 0)
+        {
+            var value =
+                ReadInt64(
+                    element,
+                    name,
+                    fallback
+                );
+
+            if (
+                value >
+                int.MaxValue
+            )
+            {
+                return int.MaxValue;
+            }
+
+            if (
+                value <
+                int.MinValue
+            )
+            {
+                return int.MinValue;
+            }
+
+            return Convert.ToInt32(
+                value
+            );
+        }
+
+        foreach (
+            var element in
+                document.RootElement
+                    .EnumerateArray()
+        )
+        {
+            if (
+                element.ValueKind !=
+                JsonValueKind.Object
+            )
+            {
+                continue;
+            }
+
+            var matchId =
+                ReadInt64(
+                    element,
+                    "matchId"
+                );
+
+            var item =
+                new TsObject(
+                    "DeadlockMatchHistoryItem"
+                );
+
+            item.SetField(
+                "matchId",
+                TsValue.FromUInt64(
+                    matchId > 0
+                        ? unchecked(
+                            (ulong)matchId
+                        )
+                        : 0UL
+                )
+            );
+
+            item.SetField(
+                "heroId",
+                TsValue.FromInt32(
+                    ReadInt32(
+                        element,
+                        "heroId"
+                    )
+                )
+            );
+
+            item.SetField(
+                "durationS",
+                TsValue.FromInt32(
+                    ReadInt32(
+                        element,
+                        "durationS"
+                    )
+                )
+            );
+
+            item.SetField(
+                "startTime",
+                TsValue.FromInt32(
+                    ReadInt32(
+                        element,
+                        "startTime"
+                    )
+                )
+            );
+
+            item.SetField(
+                "matchResult",
+                TsValue.FromInt32(
+                    ReadInt32(
+                        element,
+                        "matchResult"
+                    )
+                )
+            );
+
+            item.SetField(
+                "playerTeam",
+                TsValue.FromInt32(
+                    ReadInt32(
+                        element,
+                        "playerTeam"
+                    )
+                )
+            );
+
+            item.SetField(
+                "playerKills",
+                TsValue.FromInt32(
+                    ReadInt32(
+                        element,
+                        "playerKills"
+                    )
+                )
+            );
+
+            item.SetField(
+                "playerDeaths",
+                TsValue.FromInt32(
+                    ReadInt32(
+                        element,
+                        "playerDeaths"
+                    )
+                )
+            );
+
+            item.SetField(
+                "playerAssists",
+                TsValue.FromInt32(
+                    ReadInt32(
+                        element,
+                        "playerAssists"
+                    )
+                )
+            );
+
+            item.SetField(
+                "gameMode",
+                TsValue.FromInt32(
+                    ReadInt32(
+                        element,
+                        "gameMode"
+                    )
+                )
+            );
+
+            item.SetField(
+                "matchMode",
+                TsValue.FromInt32(
+                    ReadInt32(
+                        element,
+                        "matchMode"
+                    )
+                )
+            );
+
+            item.SetField(
+                "winningTeam",
+                TsValue.FromInt32(
+                    ReadInt32(
+                        element,
+                        "winningTeam"
+                    )
+                )
+            );
+
+            item.SetField(
+                "playerMatchOutcome",
+                TsValue.FromInt32(
+                    ReadInt32(
+                        element,
+                        "playerMatchOutcome"
+                    )
+                )
+            );
+
+            result.Add(
+                new TsObjectValue(
+                    item
+                )
+            );
+        }
+
+        return new TsArrayValue(
+            result
+        );
+    }
+
+
+    // SKYNET_DEADLOCK_RANKED_DB_HOST_V1
+    //
+    // Returns an actual TypeSharp object.
+    // Do NOT return the JSON string directly: TypeSharp scripts
+    // intentionally do not depend on JSON.parse().
+    public TsValue DeadlockRankedSocache(
+        TsValue[] args)
+    {
+        var accountId =
+            args.Length > 0
+                ? checked(
+                    (uint)ToInteger(
+                        args[0],
+                        "deadlockRankedSocache.accountId"
+                    )
+                )
+                : _context.AccountId;
+
+        if (
+            accountId == 0
+        )
+        {
+            accountId =
+                _context.AccountId;
+        }
+
+        var json =
+            DeadlockGcRuntimeServices
+                .RankedSocacheJsonProvider?
+                .Invoke(
+                    accountId
+                ) ??
+            "{}";
+
+        return ToTsDeadlockRankedSocache(
+            json,
+            accountId
+        );
+    }
+
+    private static TsValue ToTsDeadlockRankedSocache(
+        string json,
+        uint fallbackAccountId)
+    {
+        // SKYNET_DEADLOCK_FULL_PROFILE_STATS_HOST_V1
+        using var document =
+            System.Text.Json.JsonDocument.Parse(
+                string.IsNullOrWhiteSpace(
+                    json
+                )
+                    ? "{}"
+                    : json
+            );
+
+        var root =
+            document.RootElement;
+
+        var result =
+            new TsObject(
+                "DeadlockRankedSocacheSnapshot"
+            );
+
+        result.SetField(
+            "accountId",
+            TsValue.FromInt64(
+                DeadlockJsonUInt32(
+                    root,
+                    "accountId",
+                    fallbackAccountId
+                )
+            )
+        );
+
+        result.SetField(
+            "normalWins",
+            TsValue.FromInt64(
+                DeadlockJsonUInt32(
+                    root,
+                    "normalWins",
+                    0
+                )
+            )
+        );
+
+        // SKYNET_DEADLOCK_9165_MATCHES_HOST_V41
+        result.SetField(
+            "normalMatches",
+            TsValue.FromInt64(
+                DeadlockJsonUInt32(
+                    root,
+                    "normalMatches",
+                    0
+                )
+            )
+        );
+
+        result.SetField(
+            "normalKills",
+            TsValue.FromInt64(
+                DeadlockJsonUInt32(
+                    root,
+                    "normalKills",
+                    0
+                )
+            )
+        );
+
+        result.SetField(
+            "normalAssists",
+            TsValue.FromInt64(
+                DeadlockJsonUInt32(
+                    root,
+                    "normalAssists",
+                    0
+                )
+            )
+        );
+
+        result.SetField(
+            "normalSouls",
+            TsValue.FromInt64(
+                DeadlockJsonUInt32(
+                    root,
+                    "normalSouls",
+                    0
+                )
+            )
+        );
+
+        result.SetField(
+            "normalLastHits",
+            TsValue.FromInt64(
+                DeadlockJsonUInt32(
+                    root,
+                    "normalLastHits",
+                    0
+                )
+            )
+        );
+
+        result.SetField(
+            "normalDenies",
+            TsValue.FromInt64(
+                DeadlockJsonUInt32(
+                    root,
+                    "normalDenies",
+                    0
+                )
+            )
+        );
+
+        result.SetField(
+            "normalHealing",
+            TsValue.FromInt64(
+                DeadlockJsonUInt32(
+                    root,
+                    "normalHealing",
+                    0
+                )
+            )
+        );
+
+        result.SetField(
+            "normalObjectiveDamage",
+            TsValue.FromInt64(
+                DeadlockJsonUInt32(
+                    root,
+                    "normalObjectiveDamage",
+                    0
+                )
+            )
+        );
+
+        result.SetField(
+            "normalHeroDamage",
+            TsValue.FromInt64(
+                DeadlockJsonUInt32(
+                    root,
+                    "normalHeroDamage",
+                    0
+                )
+            )
+        );
+
+        result.SetField(
+            "normalCommends",
+            TsValue.FromInt64(
+                DeadlockJsonUInt32(
+                    root,
+                    "normalCommends",
+                    0
+                )
+            )
+        );
+
+        var heroes =
+            new TsArray();
+
+        if (
+            root.ValueKind ==
+                System.Text.Json.JsonValueKind.Object &&
+            root.TryGetProperty(
+                "heroes",
+                out var heroArray
+            ) &&
+            heroArray.ValueKind ==
+                System.Text.Json.JsonValueKind.Array
+        )
+        {
+            foreach (
+                var hero in
+                    heroArray.EnumerateArray()
+            )
+            {
+                var heroValue =
+                    new TsObject(
+                        "DeadlockRankedHero"
+                    );
+
+                heroValue.SetField(
+                    "heroId",
+                    TsValue.FromInt64(
+                        DeadlockJsonUInt32(
+                            hero,
+                            "heroId",
+                            0
+                        )
+                    )
+                );
+
+                heroValue.SetField(
+                    "commends",
+                    TsValue.FromInt64(
+                        DeadlockJsonUInt32(
+                            hero,
+                            "commends",
+                            0
+                        )
+                    )
+                );
+
+                heroValue.SetField(
+                    "heroDamage",
+                    TsValue.FromInt64(
+                        DeadlockJsonUInt32(
+                            hero,
+                            "heroDamage",
+                            0
+                        )
+                    )
+                );
+
+                heroValue.SetField(
+                    "objectiveDamage",
+                    TsValue.FromInt64(
+                        DeadlockJsonUInt32(
+                            hero,
+                            "objectiveDamage",
+                            0
+                        )
+                    )
+                );
+
+                heroValue.SetField(
+                    "healing",
+                    TsValue.FromInt64(
+                        DeadlockJsonUInt32(
+                            hero,
+                            "healing",
+                            0
+                        )
+                    )
+                );
+
+                heroValue.SetField(
+                    "denies",
+                    TsValue.FromInt64(
+                        DeadlockJsonUInt32(
+                            hero,
+                            "denies",
+                            0
+                        )
+                    )
+                );
+
+                heroValue.SetField(
+                    "lastHits",
+                    TsValue.FromInt64(
+                        DeadlockJsonUInt32(
+                            hero,
+                            "lastHits",
+                            0
+                        )
+                    )
+                );
+
+                heroValue.SetField(
+                    "souls",
+                    TsValue.FromInt64(
+                        DeadlockJsonUInt32(
+                            hero,
+                            "souls",
+                            0
+                        )
+                    )
+                );
+
+                heroValue.SetField(
+                    "assists",
+                    TsValue.FromInt64(
+                        DeadlockJsonUInt32(
+                            hero,
+                            "assists",
+                            0
+                        )
+                    )
+                );
+
+                heroValue.SetField(
+                    "kills",
+                    TsValue.FromInt64(
+                        DeadlockJsonUInt32(
+                            hero,
+                            "kills",
+                            0
+                        )
+                    )
+                );
+
+                heroValue.SetField(
+                    "matchesPlayed",
+                    TsValue.FromInt64(
+                        DeadlockJsonUInt32(
+                            hero,
+                            "matchesPlayed",
+                            0
+                        )
+                    )
+                );
+
+                heroValue.SetField(
+                    "wins",
+                    TsValue.FromInt64(
+                        DeadlockJsonUInt32(
+                            hero,
+                            "wins",
+                            0
+                        )
+                    )
+                );
+
+                heroValue.SetField(
+                    "heroXp",
+                    TsValue.FromInt64(
+                        DeadlockJsonUInt32(
+                            hero,
+                            "heroXp",
+                            0
+                        )
+                    )
+                );
+
+                heroValue.SetField(
+                    "brawlWins",
+                    TsValue.FromInt64(
+                        DeadlockJsonUInt32(
+                            hero,
+                            "brawlWins",
+                            0
+                        )
+                    )
+                );
+
+                heroes.Add(
+                    new TsObjectValue(
+                        heroValue
+                    )
+                );
+            }
+        }
+
+        result.SetField(
+            "heroes",
+            new TsArrayValue(
+                heroes
+            )
+        );
+
+        var rankedValue =
+            new TsObject(
+                "DeadlockRankedState"
+            );
+
+        var ranked =
+            default(
+                System.Text.Json.JsonElement
+            );
+
+        var hasRanked =
+            root.ValueKind ==
+                System.Text.Json.JsonValueKind.Object &&
+            root.TryGetProperty(
+                "ranked",
+                out ranked
+            ) &&
+            ranked.ValueKind ==
+                System.Text.Json.JsonValueKind.Object;
+
+        rankedValue.SetField(
+            "rankType",
+            TsValue.FromInt64(
+                hasRanked
+                    ? DeadlockJsonUInt32(
+                        ranked,
+                        "rankType",
+                        1
+                    )
+                    : 1
+            )
+        );
+
+        rankedValue.SetField(
+            "rankInterval",
+            TsValue.FromInt64(
+                hasRanked
+                    ? DeadlockJsonUInt32(
+                        ranked,
+                        "rankInterval",
+                        1
+                    )
+                    : 1
+            )
+        );
+
+        rankedValue.SetField(
+            "progress",
+            TsValue.FromInt64(
+                hasRanked
+                    ? DeadlockJsonUInt32(
+                        ranked,
+                        "progress",
+                        35
+                    )
+                    : 35
+            )
+        );
+
+        rankedValue.SetField(
+            "maxProgress",
+            TsValue.FromInt64(
+                hasRanked
+                    ? DeadlockJsonUInt32(
+                        ranked,
+                        "maxProgress",
+                        100
+                    )
+                    : 100
+            )
+        );
+
+        rankedValue.SetField(
+            "rank",
+            TsValue.FromInt64(
+                hasRanked
+                    ? DeadlockJsonUInt32(
+                        ranked,
+                        "rank",
+                        0
+                    )
+                    : 0
+            )
+        );
+
+        rankedValue.SetField(
+            "maxRank",
+            TsValue.FromInt64(
+                hasRanked
+                    ? DeadlockJsonUInt32(
+                        ranked,
+                        "maxRank",
+                        0
+                    )
+                    : 0
+            )
+        );
+
+        rankedValue.SetField(
+            "leaderboardRank",
+            TsValue.FromInt64(
+                hasRanked
+                    ? DeadlockJsonUInt32(
+                        ranked,
+                        "leaderboardRank",
+                        0
+                    )
+                    : 0
+            )
+        );
+
+        rankedValue.SetField(
+            "maxLeaderboardRank",
+            TsValue.FromInt64(
+                hasRanked
+                    ? DeadlockJsonUInt32(
+                        ranked,
+                        "maxLeaderboardRank",
+                        0
+                    )
+                    : 0
+            )
+        );
+
+        rankedValue.SetField(
+            "demoteProtectGames",
+            TsValue.FromInt64(
+                hasRanked
+                    ? DeadlockJsonUInt32(
+                        ranked,
+                        "demoteProtectGames",
+                        0
+                    )
+                    : 0
+            )
+        );
+
+        rankedValue.SetField(
+            "calibrateGames",
+            TsValue.FromInt64(
+                hasRanked
+                    ? DeadlockJsonUInt32(
+                        ranked,
+                        "calibrateGames",
+                        3
+                    )
+                    : 3
+            )
+        );
+
+        rankedValue.SetField(
+            "winBitMask",
+            TsValue.FromInt64(
+                hasRanked
+                    ? DeadlockJsonUInt32(
+                        ranked,
+                        "winBitMask",
+                        5
+                    )
+                    : 5
+            )
+        );
+
+        rankedValue.SetField(
+            "matchCount",
+            TsValue.FromInt64(
+                hasRanked
+                    ? DeadlockJsonUInt32(
+                        ranked,
+                        "matchCount",
+                        3
+                    )
+                    : 3
+            )
+        );
+
+        rankedValue.SetField(
+            "lastMatchHeroId",
+            TsValue.FromInt64(
+                hasRanked
+                    ? DeadlockJsonUInt32(
+                        ranked,
+                        "lastMatchHeroId",
+                        63
+                    )
+                    : 63
+            )
+        );
+
+        rankedValue.SetField(
+            "lastMatchOutcome",
+            TsValue.FromInt64(
+                hasRanked
+                    ? DeadlockJsonUInt32(
+                        ranked,
+                        "lastMatchOutcome",
+                        1
+                    )
+                    : 1
+            )
+        );
+
+        result.SetField(
+            "ranked",
+            new TsObjectValue(
+                rankedValue
+            )
+        );
+
+        return new TsObjectValue(
+            result
+        );
+    }
+
+    private static uint DeadlockJsonUInt32(
+        System.Text.Json.JsonElement value,
+        string propertyName,
+        uint fallback)
+    {
+        if (
+            value.ValueKind !=
+                System.Text.Json.JsonValueKind.Object ||
+            !value.TryGetProperty(
+                propertyName,
+                out var property
+            ) ||
+            property.ValueKind !=
+                System.Text.Json.JsonValueKind.Number
+        )
+        {
+            return fallback;
+        }
+
+        if (
+            property.TryGetUInt32(
+                out var unsigned
+            )
+        )
+        {
+            return unsigned;
+        }
+
+        if (
+            property.TryGetInt64(
+                out var signed
+            ) &&
+            signed >= 0 &&
+            signed <= uint.MaxValue
+        )
+        {
+            return unchecked(
+                (uint)signed
+            );
+        }
+
+        return fallback;
+    }
 
     public TsValue? Log(TsValue[] args)
     {
@@ -1603,6 +2652,503 @@ internal sealed class ScriptExchangeHost
         var changed = DotaGcRuntimeServices.SetItemStyleSink?.Invoke(_context.SteamId, itemId, style)
             ?? new List<ApiDotaEquipment>();
         return ToTsEquipmentList(changed);
+    }
+
+    // SKYNET_DEADLOCK_DB_EXCHANGE_V3
+
+    // SKYNET_DEADLOCK_REAL_9165_DB_V4
+    // SKYNET_DEADLOCK_AUTO_ENSURE_PLAYER_V2
+    public TsValue DeadlockEnsurePlayer(
+        TsValue[] args)
+    {
+        var accountId =
+            _context.AccountId;
+
+        var steamId =
+            _context.SteamId;
+
+        var personaName =
+            _context.PersonaName ?? "";
+
+        if (
+            args.Length > 0
+        )
+        {
+            accountId =
+                Convert.ToUInt32(
+                    ToNumber(
+                        args[0],
+                        "deadlockEnsurePlayer.accountId"
+                    )
+                );
+        }
+
+        if (
+            accountId == 0
+        )
+        {
+            accountId =
+                _context.AccountId;
+        }
+
+        var provider =
+            DeadlockGcRuntimeServices
+                .EnsurePlayerProvider;
+
+        var success =
+            provider?.Invoke(
+                accountId,
+                steamId,
+                personaName
+            )
+            ?? false;
+
+        _logger.LogInformation(
+            "Deadlock GC EnsurePlayer account={AccountId} steam={SteamId} persona={PersonaName} success={Success}",
+            accountId,
+            steamId,
+            personaName,
+            success
+        );
+
+        return TsValue.FromBool(
+            success
+        );
+    }
+
+    public TsValue DeadlockAccountStats(
+        TsValue[] args)
+    {
+        var accountId =
+            args.Length > 0
+                ? Convert.ToUInt32(
+                    ToNumber(
+                        args[0],
+                        "deadlockAccountStats.accountId"
+                    )
+                )
+                : _context.AccountId;
+
+        if (accountId == 0)
+        {
+            accountId =
+                _context.AccountId;
+        }
+
+        var accountJson =
+            DeadlockGcRuntimeServices
+                .AccountStatsJsonProvider
+                ?.Invoke(
+                    accountId
+                )
+            ?? "{}";
+
+        var heroJson =
+            DeadlockGcRuntimeServices
+                .HeroStatsJsonProvider
+                ?.Invoke(
+                    accountId
+                )
+            ?? "[]";
+
+        static uint ReadUInt32(
+            JsonElement element,
+            params string[] names)
+        {
+            if (
+                element.ValueKind !=
+                JsonValueKind.Object
+            )
+            {
+                return 0;
+            }
+
+            foreach (
+                var property in
+                element.EnumerateObject()
+            )
+            {
+                foreach (
+                    var name in
+                    names
+                )
+                {
+                    if (
+                        !string.Equals(
+                            property.Name,
+                            name,
+                            StringComparison.OrdinalIgnoreCase
+                        )
+                    )
+                    {
+                        continue;
+                    }
+
+                    if (
+                        property.Value.ValueKind ==
+                        JsonValueKind.Number
+                    )
+                    {
+                        if (
+                            property.Value.TryGetUInt32(
+                                out var u32
+                            )
+                        )
+                        {
+                            return u32;
+                        }
+
+                        if (
+                            property.Value.TryGetInt64(
+                                out var i64
+                            ) &&
+                            i64 > 0
+                        )
+                        {
+                            return unchecked(
+                                (uint)i64
+                            );
+                        }
+                    }
+
+                    if (
+                        property.Value.ValueKind ==
+                        JsonValueKind.String &&
+                        uint.TryParse(
+                            property.Value.GetString(),
+                            out var parsed
+                        )
+                    )
+                    {
+                        return parsed;
+                    }
+                }
+            }
+
+            return 0;
+        }
+
+        using var accountDocument =
+            JsonDocument.Parse(
+                string.IsNullOrWhiteSpace(
+                    accountJson
+                )
+                    ? "{}"
+                    : accountJson
+            );
+
+        using var heroDocument =
+            JsonDocument.Parse(
+                string.IsNullOrWhiteSpace(
+                    heroJson
+                )
+                    ? "[]"
+                    : heroJson
+            );
+
+        var accountWins =
+            ReadUInt32(
+                accountDocument.RootElement,
+                "wins",
+                "gamesWon",
+                "normalWins",
+                "totalWins"
+            );
+
+        var accountGames =
+            ReadUInt32(
+                accountDocument.RootElement,
+                "matchesPlayed",
+                "gamesPlayed",
+                "matchCount",
+                "matches",
+                "totalGames"
+            );
+
+        uint heroWinsSum = 0;
+        uint heroGamesSum = 0;
+
+        var heroRows =
+            new TsArray();
+
+        var heroCount =
+            0;
+
+        if (
+            heroDocument.RootElement.ValueKind ==
+            JsonValueKind.Array
+        )
+        {
+            foreach (
+                var hero in
+                heroDocument.RootElement.EnumerateArray()
+            )
+            {
+                var heroId =
+                    ReadUInt32(
+                        hero,
+                        "heroId",
+                        "hero_id"
+                    );
+
+                if (heroId == 0)
+                {
+                    continue;
+                }
+
+                var wins =
+                    ReadUInt32(
+                        hero,
+                        "wins",
+                        "gamesWon",
+                        "totalWins"
+                    );
+
+                var games =
+                    ReadUInt32(
+                        hero,
+                        "matchesPlayed",
+                        "gamesPlayed",
+                        "matchCount",
+                        "matches",
+                        "totalGames"
+                    );
+
+                heroWinsSum +=
+                    wins;
+
+                heroGamesSum +=
+                    games;
+
+                var statIds =
+                    new TsArray();
+
+                statIds.Add(
+                    TsValue.FromInt32(6)
+                );
+
+                statIds.Add(
+                    TsValue.FromInt32(7)
+                );
+
+                var totals =
+                    new TsArray();
+
+                totals.Add(
+                    TsValue.FromUInt64(
+                        wins
+                    )
+                );
+
+                totals.Add(
+                    TsValue.FromUInt64(
+                        games
+                    )
+                );
+
+                var row =
+                    new TsObject(
+                        "CMsgAccountHeroStats"
+                    );
+
+                row.SetField(
+                    "hero_id",
+                    TsValue.FromInt32(
+                        unchecked(
+                            (int)heroId
+                        )
+                    )
+                );
+
+                row.SetField(
+                    "stat_id",
+                    new TsArrayValue(
+                        statIds
+                    )
+                );
+
+                row.SetField(
+                    "total_value",
+                    new TsArrayValue(
+                        totals
+                    )
+                );
+
+                heroRows.Add(
+                    new TsObjectValue(
+                        row
+                    )
+                );
+
+                heroCount++;
+            }
+        }
+
+        if (
+            accountWins == 0 &&
+            heroWinsSum > 0
+        )
+        {
+            accountWins =
+                heroWinsSum;
+        }
+
+        if (
+            accountGames == 0 &&
+            heroGamesSum > 0
+        )
+        {
+            accountGames =
+                heroGamesSum;
+        }
+
+        var globalStatIds =
+            new TsArray();
+
+        globalStatIds.Add(
+            TsValue.FromInt32(6)
+        );
+
+        globalStatIds.Add(
+            TsValue.FromInt32(7)
+        );
+
+        var globalTotals =
+            new TsArray();
+
+        globalTotals.Add(
+            TsValue.FromUInt64(
+                accountWins
+            )
+        );
+
+        globalTotals.Add(
+            TsValue.FromUInt64(
+                accountGames
+            )
+        );
+
+        var globalRow =
+            new TsObject(
+                "CMsgAccountHeroStats"
+            );
+
+        globalRow.SetField(
+            "hero_id",
+            TsValue.FromInt32(0)
+        );
+
+        globalRow.SetField(
+            "stat_id",
+            new TsArrayValue(
+                globalStatIds
+            )
+        );
+
+        globalRow.SetField(
+            "total_value",
+            new TsArrayValue(
+                globalTotals
+            )
+        );
+
+        var rows =
+            new TsArray();
+
+        rows.Add(
+            new TsObjectValue(
+                globalRow
+            )
+        );
+
+        for (
+            var i = 0;
+            i < heroRows.Count;
+            i++
+        )
+        {
+            rows.Add(
+                heroRows.Get(i)
+            );
+        }
+
+        var stats =
+            new TsObject(
+                "CMsgAccountStats"
+            );
+
+        stats.SetField(
+            "account_id",
+            TsValue.FromInt32(
+                unchecked(
+                    (int)accountId
+                )
+            )
+        );
+
+        stats.SetField(
+            "stats",
+            new TsArrayValue(
+                rows
+            )
+        );
+
+        _logger.LogInformation(
+            "Deadlock GC DB 9165 account={AccountId} wins={Wins} games={Games} heroes={Heroes} rows={Rows}",
+            accountId,
+            accountWins,
+            accountGames,
+            heroCount,
+            rows.Count
+        );
+
+        return new TsObjectValue(
+            stats
+        );
+    }
+
+    public TsValue DeadlockHeroStats(
+        TsValue[] args)
+    {
+        var accountId =
+            args.Length > 0
+                ? Convert.ToUInt32(
+                    ToNumber(
+                        args[0],
+                        "deadlockHeroStats.accountId"
+                    )
+                )
+                : _context.AccountId;
+
+        if (
+            accountId ==
+            0
+        )
+        {
+            accountId =
+                _context.AccountId;
+        }
+
+        var provider =
+            DeadlockGcRuntimeServices
+                .HeroStatsJsonProvider;
+
+        var json =
+            provider
+                ?.Invoke(
+                    accountId
+                )
+            ?? "[]";
+
+        _logger.LogInformation(
+            "Deadlock GC DB hero stats account={AccountId} json={Json}",
+            accountId,
+            json
+        );
+
+        return TsValue.FromString(
+            json
+        );
     }
 
     public TsValue DotaProfile(TsValue[] args)

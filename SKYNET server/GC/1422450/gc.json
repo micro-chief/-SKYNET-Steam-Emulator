@@ -13,5 +13,8 @@
     "generatedContracts": "generated/protobuf.ts",
     "extraMessageIds": "contracts/extra-message-ids.json",
     "routes": "contracts/routes.json"
-  }
+  },
+  "hostServices": [
+    "deadlock"
+  ]
 }

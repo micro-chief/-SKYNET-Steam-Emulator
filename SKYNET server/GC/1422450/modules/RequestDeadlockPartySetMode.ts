@@ -135,11 +135,12 @@ export function requestDeadlockPartySetMode(
                 team:
                     0,
 
+                // SKYNET_RANKED_PARTY_SETMODE_SYNC_V1
                 permissions:
-                    0n,
+                    3n /* SKYNET_RANKED_PERMISSION_BIT_PARTY_SETMODE_V3: previous=2, Ranked=1, combined=3 */,
 
                 new_player_progress:
-                    0n,
+                    30n,
 
                 owned_heroes:
                     [],
@@ -147,8 +148,24 @@ export function requestDeadlockPartySetMode(
                 low_priority_games_remaining:
                     0,
 
-                ranked_scores:
-                    []
+                ranked_scores: [
+                    {
+                        rank_type:
+                            1,
+
+                        rank_interval:
+                            1,
+
+                        unlocked_heroes: [
+                            14,
+                            63,
+                            64
+                        ],
+
+                        in_calibration:
+                            true
+                    }
+                ]
             }
         ],
 
