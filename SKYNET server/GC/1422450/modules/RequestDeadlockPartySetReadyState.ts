@@ -15,6 +15,17 @@ import {
 
 interface PartyReadyRequest {
     readonly party_id?: bigint;
+    /*
+     * Official protobuf field #2:
+     *   optional bool ready_state = 2;
+     */
+    readonly ready_state?: boolean;
+    readonly readyState?: boolean;
+
+    /*
+     * Legacy SKYNET alias.
+     * Kept only for backward compatibility.
+     */
     readonly ready?: boolean;
 }
 
@@ -140,84 +151,129 @@ export function requestDeadlockPartySetReadyState(
     const readyRequest: any =
         ctx.request;
 
-    let ready =
-        member.is_ready ??
-        false;
+    // === SKYNET_9142_CANONICAL_READY_STATE_V1_BEGIN ===
+    /*
+     * CMsgClientToGCPartySetReadyState:
+     *
+     *   fixed64 party_id    = 1
+     *   bool    ready_state = 2
+     *   message hero_roster = 3
+     *
+     * The old SKYNET handler incorrectly read:
+     *
+     *   ctx.request.ready
+     *
+     * Therefore explicit ready_state=false was interpreted as
+     * "no ready field", hero_roster won, and the member was forced
+     * back to ready=true.
+     */
 
-    const readyFieldPresent =
-        readyRequest.ready !=
-        null;
+    const readyRequest9142: any =
+        ctx.request;
 
-    const readyHeroRosterPresent =
-        readyRequest.hero_roster !=
-        null;
+    const readyMember9142: any =
+        member;
 
     /*
-     * Priority:
+     * ProtoCodec may expose either:
      *
-     * 1. Explicit ready from client always wins.
+     *   ready_state
+     *   readyState
      *
-     * 2. Hero Select -> "Играть":
-     *    client can send hero_roster without an explicit ready field.
-     *    That transition means the player has completed hero selection
-     *    and entered the ready state.
+     * Keep legacy ready only as final compatibility fallback.
+     */
+    const explicitReadyState9142 =
+        readyRequest9142.ready_state ??
+        readyRequest9142.readyState ??
+        readyRequest9142.ready;
+
+    const incomingHeroRoster9142 =
+        readyRequest9142.hero_roster ??
+        readyRequest9142.heroRoster;
+
+    /*
+     * Because the codec prefers camelCase aliases when both are
+     * present, read camelCase first from the existing Party SO.
+     */
+    const previousReady9142 =
+        readyMember9142.isReady ??
+        readyMember9142.is_ready ??
+        false;
+
+    let ready =
+        previousReady9142;
+
+    /*
+     * Precedence:
      *
-     * 3. Request containing neither field must not silently reset
-     *    an already-ready member back to false.
+     * 1. Explicit ready_state=true/false ALWAYS wins.
+     * 2. hero_roster implies ready=true ONLY when ready_state
+     *    was not supplied.
+     * 3. Otherwise preserve previous state.
      */
     if (
-        readyFieldPresent
-    ) {
-        ready =
-            readyRequest.ready;
-    }
-    else if (
-        readyHeroRosterPresent
+        explicitReadyState9142 ===
+        true
     ) {
         ready =
             true;
-    }
 
-    log(
-        "[9142-READY-FIX] ========================================"
-    );
-
-    log(
-        "[9142-READY-FIX] explicit_ready=" +
-        readyFieldPresent
-    );
-
-    if (
-        readyFieldPresent
-    ) {
         log(
-            "[9142-READY-FIX] request.ready=" +
-            readyRequest.ready
+            "[9142-READY] ready_state=true"
+        );
+    }
+    else if (
+        explicitReadyState9142 ===
+        false
+    ) {
+        ready =
+            false;
+
+        log(
+            "[9142-READY] ready_state=false"
+        );
+    }
+    else if (
+        incomingHeroRoster9142 !=
+        null
+    ) {
+        ready =
+            true;
+
+        log(
+            "[9142-READY] ready_state=absent hero_roster=true -> ready=true"
+        );
+    }
+    else {
+        log(
+            "[9142-READY] ready_state=absent preserving previous state"
         );
     }
 
-    log(
-        "[9142-READY-FIX] hero_roster=" +
-        readyHeroRosterPresent
-    );
-
-    log(
-        "[9142-READY-FIX] previous_member_ready=" +
-        (
-            member.is_ready ??
-            false
-        )
-    );
-
-    log(
-        "[9142-READY-FIX] resolved_ready=" +
-        ready
-    );
-
-    member.is_ready =
+    /*
+     * Synchronize BOTH aliases before the Party is encoded.
+     */
+    readyMember9142.is_ready =
         ready;
 
-    // === SKYNET_9142_HERO_PLAY_READY_FIX_V1_END ===
+    readyMember9142.isReady =
+        ready;
+
+    if (
+        ready ===
+        true
+    ) {
+        log(
+            "[9142-READY] final=true"
+        );
+    }
+    else {
+        log(
+            "[9142-READY] final=false"
+        );
+    }
+
+    // === SKYNET_9142_CANONICAL_READY_STATE_V1_END ===
 
     // === SKYNET_READY_HERO_ROSTER_SYNC_V6 ===
 
@@ -227,11 +283,23 @@ export function requestDeadlockPartySetReadyState(
     const heroMember: any =
         member;
 
+    const skynetIncomingHeroRoster9142: any =
+        heroRequest.heroRoster ??
+        heroRequest.hero_roster;
+
     if (
-        heroRequest.hero_roster != null
+        skynetIncomingHeroRoster9142 !=
+        null
     ) {
         heroMember.hero_roster =
-            heroRequest.hero_roster;
+            skynetIncomingHeroRoster9142;
+
+        heroMember.heroRoster =
+            skynetIncomingHeroRoster9142;
+
+        log(
+            "[9142-ALIAS] hero_roster + heroRoster synchronized"
+        );
 
         log(
             "[9142-HERO] present=true"

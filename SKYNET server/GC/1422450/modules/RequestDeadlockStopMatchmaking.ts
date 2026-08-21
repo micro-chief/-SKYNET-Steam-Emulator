@@ -16,6 +16,10 @@ import {
     getCurrentDeadlockPartyState
 } from "./RequestDeadlockPartyCreate";
 
+import {
+    setDeadlockMatchmakingState
+} from "./DeadlockMatchmakingState";
+
 const PARTY_SO_TYPE_ID =
     105;
 
@@ -58,9 +62,49 @@ export function requestDeadlockStopMatchmaking(
         "[9012] ========================================"
     );
 
+    // SKYNET_9012_ACCOUNT_MATCHMAKING_STATE_V2
+    setDeadlockMatchmakingState(
+        ctx.accountId,
+        false
+    );
+
+    log(
+        "[9012-STATE] account_id=" +
+        ctx.accountId
+    );
+
+    log(
+        "[9012-STATE] in_matchmaking=false"
+    );
+
     if (!party) {
+        // SKYNET_BOT_MATCH_STOP_WITHOUT_PARTY_V1
+        /*
+         * Bot Match matchmaking does not require/create a CSOCitadelParty.
+         *
+         * Client flow:
+         *
+         *   9010 StartMatchmaking
+         *     -> 9011 OK
+         *
+         * Change Hero / Cancel:
+         *
+         *   9012 StopMatchmaking
+         *     -> 9013 success=true
+         *
+         * The previous implementation returned early merely because no
+         * Party existed. That left the Deadlock client in its local
+         * "finding match" state, so the Change Hero button only played
+         * its UI sound and never reopened hero selection.
+         *
+         * No SO update is needed because there is no Party SO to mutate.
+         */
         log(
-            "[9012] no current Party"
+            "[9012] no current Party - standalone/bot matchmaking"
+        );
+
+        log(
+            "[9012-BOT] reply success=true"
         );
 
         ctx.reply({

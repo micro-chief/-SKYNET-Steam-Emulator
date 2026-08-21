@@ -1433,6 +1433,127 @@ export function requestDeadlockPartyAction(
         return true;
     }
 
+    // === SKYNET_CUSTOM_LOBBY_PARTY_ACTION_SETTINGS_V1_BEGIN ===
+
+    /*
+     * Official Valve CMsgClientToGCPartyAction.EAction:
+     *
+     *   14 = k_eSetRandomizedLanes
+     *   16 = k_eSetPubliclyVisible
+     *   17 = k_eSetCheatsEnabled
+     *   21 = k_eSetDuplicateHeroesEnabled
+     *
+     * Captured locally:
+     *
+     *   action 14 -> bool_value
+     *   action 16 -> bool_value
+     *   action 17 -> bool_value
+     *   action 21 -> bool_value
+     */
+
+    const settingsRequest: any =
+        ctx.request;
+
+    const settingsActionId =
+        settingsRequest.action_id ??
+        0;
+
+    const settingsBoolValue =
+        settingsRequest.bool_value ??
+        false;
+
+    let privateSettings: any =
+        party.private_lobby_settings;
+
+    if (
+        privateSettings ==
+        null
+    ) {
+        /*
+         * Keep the already-established match slot shape if this
+         * handler is ever reached with missing PrivateLobbySettings.
+         */
+        privateSettings = {
+            match_slots: []
+        };
+
+        party.private_lobby_settings =
+            privateSettings;
+    }
+
+    if (
+        settingsActionId ===
+        14
+    ) {
+        // SKYNET_CUSTOM_LOBBY_SETTINGS_CAMEL_SNAKE_SYNC_V1
+        privateSettings.randomize_lanes =
+            settingsBoolValue;
+
+        privateSettings.randomizeLanes =
+            settingsBoolValue;
+
+        log(
+            "[9129-SETTINGS] randomize_lanes=" +
+            privateSettings.randomize_lanes +
+            " randomizeLanes=" +
+            privateSettings.randomizeLanes
+        );
+    }
+    else if (
+        settingsActionId ===
+        16
+    ) {
+        privateSettings.is_publicly_visible =
+            settingsBoolValue;
+
+        privateSettings.isPubliclyVisible =
+            settingsBoolValue;
+
+        log(
+            "[9129-SETTINGS] is_publicly_visible=" +
+            privateSettings.is_publicly_visible +
+            " isPubliclyVisible=" +
+            privateSettings.isPubliclyVisible
+        );
+    }
+    else if (
+        settingsActionId ===
+        17
+    ) {
+        privateSettings.cheats_enabled =
+            settingsBoolValue;
+
+        privateSettings.cheatsEnabled =
+            settingsBoolValue;
+
+        log(
+            "[9129-SETTINGS] cheats_enabled=" +
+            privateSettings.cheats_enabled +
+            " cheatsEnabled=" +
+            privateSettings.cheatsEnabled
+        );
+    }
+    else if (
+        settingsActionId ===
+        21
+    ) {
+        privateSettings.duplicate_heroes_enabled =
+            settingsBoolValue;
+
+        privateSettings.duplicateHeroesEnabled =
+            settingsBoolValue;
+
+        log(
+            "[9129-SETTINGS] duplicate_heroes_enabled=" +
+            privateSettings.duplicate_heroes_enabled +
+            " duplicateHeroesEnabled=" +
+            privateSettings.duplicateHeroesEnabled
+        );
+    }
+
+    // === SKYNET_CUSTOM_LOBBY_PARTY_ACTION_SETTINGS_V1_END ===
+
+
     log(
         "[9129-STATE] ===== outbound party state ====="
     );
@@ -1506,6 +1627,171 @@ export function requestDeadlockPartyAction(
             );
         }
     }
+
+    // === SKYNET_CUSTOM_LOBBY_REGIONS_ACTION15_V1_BEGIN ===
+    /*
+     * PartyAction:
+     *
+     *   action_id = 15
+     *   uint_value = selected server region
+     *
+     * 0 means automatic selection.
+     *
+     * Keep snake_case + camelCase synchronized for the
+     * same ProtoCodec alias-precedence reason as the
+     * other Custom Lobby settings.
+     */
+
+    const skynetRegionActionRequest9129: any =
+        ctx.request;
+
+    const skynetRegionActionId9129 =
+        Number(
+            skynetRegionActionRequest9129.actionId ??
+            skynetRegionActionRequest9129.action_id ??
+            0
+        );
+
+    if (
+        skynetRegionActionId9129 ===
+        15
+    ) {
+        const skynetRegionIds9129 = [
+            7,
+            1,
+            27,
+            31,
+            23,
+            22,
+            2,
+            5,
+            28,
+            19,
+            8,
+            14,
+            44,
+            24,
+            3,
+            52,
+            21,
+            9,
+            45,
+            15,
+            39,
+            38,
+            11,
+            10
+        ];
+
+        const skynetRegionSettings9129: any =
+            party.privateLobbySettings ??
+            party.private_lobby_settings ??
+            {};
+
+        /*
+         * Re-publish the exact available list as well.
+         * This makes action 15 self-healing even if an older
+         * in-memory Party object did not contain it.
+         */
+        const skynetAvailableRegions9129: any[] =
+            [];
+
+        for (
+            let skynetRegionIndex9129 =
+                0;
+    
+            skynetRegionIndex9129 <
+                skynetRegionIds9129.length;
+    
+            skynetRegionIndex9129++
+        ) {
+            const skynetRegionId9129 =
+                skynetRegionIds9129[
+                    skynetRegionIndex9129
+                ];
+
+            skynetAvailableRegions9129.push({
+                region_id:
+                    skynetRegionId9129,
+
+                regionId:
+                    skynetRegionId9129
+            });
+        }
+
+        skynetRegionSettings9129.available_regions =
+            skynetAvailableRegions9129;
+
+        skynetRegionSettings9129.availableRegions =
+            skynetAvailableRegions9129;
+
+        const skynetRawSelectedRegion9129 =
+            skynetRegionActionRequest9129.uintValue ??
+            skynetRegionActionRequest9129.uint_value ??
+            0;
+
+        const skynetRequestedRegion9129 =
+            Number(
+                skynetRawSelectedRegion9129
+            );
+
+        let skynetRequestedRegionValid9129 =
+            skynetRequestedRegion9129 ===
+            0;
+
+        for (
+            let skynetRegionCheck9129 =
+                0;
+    
+            skynetRegionCheck9129 <
+                skynetRegionIds9129.length;
+    
+            skynetRegionCheck9129++
+        ) {
+            if (
+                skynetRegionIds9129[
+                    skynetRegionCheck9129
+                ] ===
+                skynetRequestedRegion9129
+            ) {
+                skynetRequestedRegionValid9129 =
+                    true;
+
+                break;
+            }
+        }
+
+        if (
+            skynetRequestedRegionValid9129
+        ) {
+            skynetRegionSettings9129.server_region =
+                skynetRequestedRegion9129;
+
+            skynetRegionSettings9129.serverRegion =
+                skynetRequestedRegion9129;
+
+            log(
+                "[9129-REGION] server_region=" +
+                skynetRequestedRegion9129 +
+                " serverRegion=" +
+                skynetRequestedRegion9129
+            );
+        }
+        else {
+            log(
+                "[9129-REGION] rejected unknown region=" +
+                skynetRequestedRegion9129
+            );
+        }
+
+        party.private_lobby_settings =
+            skynetRegionSettings9129;
+
+        party.privateLobbySettings =
+            skynetRegionSettings9129;
+    }
+
+    // === SKYNET_CUSTOM_LOBBY_REGIONS_ACTION15_V1_END ===
 
     const bytes =
         encodeProto(

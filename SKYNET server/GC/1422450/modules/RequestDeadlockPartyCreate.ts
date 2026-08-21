@@ -852,6 +852,183 @@ export function requestDeadlockPartyCreate(
     currentDeadlockPartyState =
         party;
 
+// === SKYNET_CUSTOM_LOBBY_REGIONS_CREATE_V1_BEGIN ===
+/*
+ * Official CSOCitadelParty.PrivateLobbySettings region set.
+ *
+ * Official SO observed:
+ *
+ *   server_region = 28
+ *
+ *   available_regions =
+ *     7, 1, 27, 31, 23, 22,
+ *     2, 5, 28, 19, 8, 14,
+ *     44, 24, 3, 52, 21, 9,
+ *     45, 15, 39, 38, 11, 10
+ *
+ * Region 0 is kept valid locally as:
+ *
+ *   "Select region automatically"
+ *
+ * IMPORTANT:
+ * GameCoordinatorProtoCodec prefers camelCase aliases,
+ * therefore BOTH protobuf snake_case and camelCase are
+ * synchronized.
+ */
+
+const skynetIsPrivateLobby9123 =
+    party.isPrivateLobby ===
+        true ||
+    party.is_private_lobby ===
+        true ||
+    request.isPrivateLobby ===
+        true ||
+    request.is_private_lobby ===
+        true;
+
+if (
+    skynetIsPrivateLobby9123
+) {
+    const skynetRegionIds9123 = [
+        7,
+        1,
+        27,
+        31,
+        23,
+        22,
+        2,
+        5,
+        28,
+        19,
+        8,
+        14,
+        44,
+        24,
+        3,
+        52,
+        21,
+        9,
+        45,
+        15,
+        39,
+        38,
+        11,
+        10
+    ];
+
+    const skynetRegionSettings9123: any =
+        party.privateLobbySettings ??
+        party.private_lobby_settings ??
+        {};
+
+    const skynetAvailableRegions9123: any[] =
+        [];
+
+    for (
+        let skynetRegionIndex9123 =
+            0;
+
+        skynetRegionIndex9123 <
+            skynetRegionIds9123.length;
+
+        skynetRegionIndex9123++
+    ) {
+        const skynetRegionId9123 =
+            skynetRegionIds9123[
+                skynetRegionIndex9123
+            ];
+
+        skynetAvailableRegions9123.push({
+            region_id:
+                skynetRegionId9123,
+
+            regionId:
+                skynetRegionId9123
+        });
+    }
+
+    skynetRegionSettings9123.available_regions =
+        skynetAvailableRegions9123;
+
+    skynetRegionSettings9123.availableRegions =
+        skynetAvailableRegions9123;
+
+    /*
+     * Preserve the client's existing selection.
+     *
+     * 0 = automatic.
+     *
+     * If a malformed value somehow arrives, fall back
+     * to automatic instead of inventing a region.
+     */
+    const skynetRawRegion9123 =
+        skynetRegionSettings9123.serverRegion ??
+        skynetRegionSettings9123.server_region ??
+        0;
+
+    let skynetSelectedRegion9123 =
+        Number(
+            skynetRawRegion9123
+        );
+
+    let skynetRegionValid9123 =
+        skynetSelectedRegion9123 ===
+        0;
+
+    for (
+        let skynetRegionCheck9123 =
+            0;
+
+        skynetRegionCheck9123 <
+            skynetRegionIds9123.length;
+
+        skynetRegionCheck9123++
+    ) {
+        if (
+            skynetRegionIds9123[
+                skynetRegionCheck9123
+            ] ===
+            skynetSelectedRegion9123
+        ) {
+            skynetRegionValid9123 =
+                true;
+
+            break;
+        }
+    }
+
+    if (
+        !skynetRegionValid9123
+    ) {
+        skynetSelectedRegion9123 =
+            0;
+    }
+
+    skynetRegionSettings9123.server_region =
+        skynetSelectedRegion9123;
+
+    skynetRegionSettings9123.serverRegion =
+        skynetSelectedRegion9123;
+
+    /*
+     * Top-level nested-message aliases are synchronized too.
+     */
+    party.private_lobby_settings =
+        skynetRegionSettings9123;
+
+    party.privateLobbySettings =
+        skynetRegionSettings9123;
+
+    log(
+        "[9123-REGIONS] available=" +
+        skynetAvailableRegions9123.length +
+        " selected=" +
+        skynetSelectedRegion9123
+    );
+}
+
+// === SKYNET_CUSTOM_LOBBY_REGIONS_CREATE_V1_END ===
+
 const partyBytes =
         encodeProto(
             "SKYNET.Server.GameCoordinator.Citadel.CSOCitadelParty",

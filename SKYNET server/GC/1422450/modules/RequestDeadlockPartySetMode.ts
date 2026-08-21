@@ -120,8 +120,22 @@ export function requestDeadlockPartySetMode(
                 rights_flags:
                     3,
 
+                /* SKYNET_BOT_MATCH_MEMBER_NOT_READY_V1 */
+                /*
+                 * Bot Match hero selection must remain editable while
+                 * matchmaking is active.
+                 *
+                 * 9207 previously published this synthetic Party member
+                 * as ready=true. Deadlock then locally treats hero
+                 * selection as locked: the Change Hero button plays its
+                 * sound but emits no GC message at all.
+                 *
+                 * Bot matchmaking itself is carried by 9010 and already
+                 * contains match_info + heroes, so this Party member must
+                 * not be pre-locked as ready.
+                 */
                 is_ready:
-                    true,
+                    false,
 
                 player_type:
                     0,
