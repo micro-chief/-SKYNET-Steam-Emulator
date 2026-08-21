@@ -8,10 +8,6 @@ import {
     Route
 } from "../framework/gc";
 
-import {
-    setDeadlockMatchmakingState
-} from "./DeadlockMatchmakingState";
-
 export const RequestDeadlockStartMatchmakingRoute: Route = {
     requestId:
         EGCCitadelClientMessages
@@ -184,20 +180,7 @@ export const requestDeadlockStartMatchmaking = (
     void heroes;
     void pgiVerified;
 
-    // SKYNET_9010_ACCOUNT_MATCHMAKING_STATE_V2
-    setDeadlockMatchmakingState(
-        ctx.accountId,
-        true
-    );
-
-    log(
-        "[9010-STATE] account_id=" +
-        ctx.accountId
-    );
-
-    log(
-        "[9010-STATE] in_matchmaking=true"
-    );
+    
 
     ctx.reply({
         result:

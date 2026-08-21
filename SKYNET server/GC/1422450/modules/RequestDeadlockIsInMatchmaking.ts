@@ -6,10 +6,6 @@ import {
     ProtoDescriptor
 } from "../generated/protobuf";
 
-import {
-    getDeadlockMatchmakingState
-} from "./DeadlockMatchmakingState";
-
 const requestProto = {
     name:
         "SKYNET.Server.GameCoordinator.Citadel.CMsgClientToGCIsInMatchmaking"
@@ -42,34 +38,16 @@ export const RequestDeadlockIsInMatchmakingRoute = {
 export function requestDeadlockIsInMatchmaking(
     ctx: any
 ): boolean {
-    // SKYNET_9017_ACCOUNT_MATCHMAKING_STATE_V2
-
-    const inMatchmaking =
-        getDeadlockMatchmakingState(
-            ctx.accountId
-        );
-
-    log(
-        "[9017-STATE] account_id=" +
-        ctx.accountId
-    );
-
-    if (
-        inMatchmaking
-    ) {
-        log(
-            "[9017-STATE] in_matchmaking=true"
-        );
-    }
-    else {
-        log(
-            "[9017-STATE] in_matchmaking=false"
-        );
-    }
+    /*
+     * Temporary state until DB-backed matchmaking session storage
+     * is implemented.
+     *
+     * For now the client must remain in matchmaking after 9010.
+     */
 
     ctx.reply({
         in_matchmaking:
-            inMatchmaking
+            true
     });
 
     return true;

@@ -16,10 +16,6 @@ import {
     getCurrentDeadlockPartyState
 } from "./RequestDeadlockPartyCreate";
 
-import {
-    setDeadlockMatchmakingState
-} from "./DeadlockMatchmakingState";
-
 const PARTY_SO_TYPE_ID =
     105;
 
@@ -62,20 +58,7 @@ export function requestDeadlockStopMatchmaking(
         "[9012] ========================================"
     );
 
-    // SKYNET_9012_ACCOUNT_MATCHMAKING_STATE_V2
-    setDeadlockMatchmakingState(
-        ctx.accountId,
-        false
-    );
-
-    log(
-        "[9012-STATE] account_id=" +
-        ctx.accountId
-    );
-
-    log(
-        "[9012-STATE] in_matchmaking=false"
-    );
+    
 
     if (!party) {
         // SKYNET_BOT_MATCH_STOP_WITHOUT_PARTY_V1
