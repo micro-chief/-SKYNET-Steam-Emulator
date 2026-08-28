@@ -1,0 +1,444 @@
+import {
+    HandlerContext
+} from "../framework/gc";
+
+import {
+    CMsgClientHello,
+    CMsgClientWelcome,
+    GcRoute,
+    ProtoDescriptor
+} from "../generated/protobuf";
+
+import {
+    getCurrentDeadlockPartyState
+} from "./RequestDeadlockPartyCreate";
+
+// === SKYNET_DEADLOCK_GS_ALLOCATE_RAW_10021_V3 ===
+//
+// Dedicated GameServer allocation stage:
+//
+//   GameServer 4007
+//       ↓
+//   GC 4005
+//       ↓
+//   once the current Deadlock dedicated reservation is registered:
+//   GC RAW 10021 CMsgGCToServerAllocateForMatch
+//
+// 10021 protobuf:
+//
+//   uint64 match_id = 1;
+//
+// We deliberately encode it manually:
+//
+//   field 1 / wire type 0 => key 0x08
+//   followed by uint64 varint.
+//
+// No generated/protobuf.ts modification is required.
+
+const requestProto = {
+    name:
+        "CMsgClientHello"
+} as ProtoDescriptor<CMsgClientHello>;
+
+const responseProto = {
+    name:
+        "CMsgClientWelcome"
+} as ProtoDescriptor<CMsgClientWelcome>;
+
+export const RequestGameServerHelloRoute = {
+    requestId:
+        4007,
+
+    request:
+        requestProto,
+
+    responseId:
+        4005,
+
+    response:
+        responseProto
+} as GcRoute<
+    CMsgClientHello,
+    CMsgClientWelcome
+>;
+
+let allocationServerSteamId =
+    "";
+
+let allocationMatchId =
+    0n;
+
+let allocationLastSentAt =
+    0;
+
+let allocationAccepted =
+    false;
+
+function encodeVarint64(
+    input: bigint
+): number[] {
+    let value =
+        input;
+
+    const bytes: number[] =
+        [];
+
+    if (
+        value <
+        0n
+    ) {
+        value =
+            0n;
+    }
+
+    while (
+        value >=
+        128n
+    ) {
+        bytes.push(
+            Number(
+                (
+                    value &
+                    127n
+                ) |
+                128n
+            )
+        );
+
+        value =
+            value >>
+            7n;
+    }
+
+    bytes.push(
+        Number(
+            value
+        )
+    );
+
+    return bytes;
+}
+
+function encodeAllocateForMatch(
+    matchId: bigint
+): number[] {
+    const body: number[] = [
+        8
+    ];
+
+    const encoded =
+        encodeVarint64(
+            matchId
+        );
+
+    for (
+        let i =
+            0;
+
+        i <
+            encoded.length;
+
+        i++
+    ) {
+        body.push(
+            encoded[i]
+        );
+    }
+
+    return body;
+}
+
+function serverIdText(
+    value: any
+): string {
+    if (
+        value == null
+    ) {
+        return "0";
+    }
+
+    return (
+        "" +
+        value
+    );
+}
+
+export function markDeadlockAllocateForMatchResponse(
+    serverSteamId: any,
+    success: boolean
+): void {
+    const incomingServer =
+        serverIdText(
+            serverSteamId
+        );
+
+    log(
+        "[GS-ALLOC] recv 10022 server=" +
+        incomingServer +
+        " success=" +
+        success
+    );
+
+    if (
+        allocationServerSteamId !==
+        incomingServer
+    ) {
+        log(
+            "[GS-ALLOC] 10022 ignored: expected server=" +
+            allocationServerSteamId
+        );
+
+        return;
+    }
+
+    allocationAccepted =
+        success;
+
+    if (
+        success
+    ) {
+        log(
+            "[GS-ALLOC] allocation ACCEPTED match_id=" +
+            allocationMatchId
+        );
+    }
+    else {
+        /*
+         * Allow retry on the next 4007 keepalive.
+         */
+        allocationLastSentAt =
+            0;
+
+        log(
+            "[GS-ALLOC] allocation REJECTED; retry armed"
+        );
+    }
+}
+
+export function requestGameServerHello(
+    ctx: HandlerContext<
+        CMsgClientHello,
+        CMsgClientWelcome
+    >
+): boolean {
+    /*
+     * Existing proven GameServer handshake.
+     */
+    ctx.reply({
+        version:
+            ctx.request.version ??
+            1
+    });
+
+    const party: any =
+        getCurrentDeadlockPartyState();
+
+    if (
+        party == null
+    ) {
+        log(
+            "[GS-ALLOC] 4007 welcome only: no current Party"
+        );
+
+        return true;
+    }
+
+    const partyId =
+        party.party_id ??
+        0n;
+
+    if (
+        partyId ==
+        0n
+    ) {
+        log(
+            "[GS-ALLOC] 4007 welcome only: party_id=0"
+        );
+
+        return true;
+    }
+
+    /*
+     * Host function installed by the dedicated-supervisor patch.
+     */
+    const dedicated: any =
+        deadlockDedicatedServerState(
+            partyId
+        );
+
+    if (
+        dedicated == null
+    ) {
+        log(
+            "[GS-ALLOC] 4007 welcome only: dedicated state=null"
+        );
+
+        return true;
+    }
+
+    if (
+        !dedicated.found
+    ) {
+        log(
+            "[GS-ALLOC] 4007 welcome only: no reservation party_id=" +
+            partyId
+        );
+
+        return true;
+    }
+
+    if (
+        !dedicated.ready
+    ) {
+        log(
+            "[GS-ALLOC] 4007 welcome only: reservation state=" +
+            dedicated.state
+        );
+
+        return true;
+    }
+
+    const expectedServer =
+        serverIdText(
+            dedicated.gameServerSteamId
+        );
+
+    const currentServer =
+        serverIdText(
+            ctx.steamId
+        );
+
+    if (
+        expectedServer ===
+        "0"
+    ) {
+        log(
+            "[GS-ALLOC] reservation ready but GameServerSteamId=0"
+        );
+
+        return true;
+    }
+
+    /*
+     * Important protection:
+     *
+     * Deadlock can use SteamGameCoordinator from non-dedicated
+     * contexts too. Only allocate when current 4007 SteamID is
+     * exactly the GameServerSteamId registered for this Party.
+     */
+    if (
+        expectedServer !==
+        currentServer
+    ) {
+        log(
+            "[GS-ALLOC] 4007 ignored server=" +
+            currentServer +
+            " expected=" +
+            expectedServer
+        );
+
+        return true;
+    }
+
+    /*
+     * Stable local match_id.
+     *
+     * Captured Valve match IDs are independent from party_id.
+     * For the local emulator we only require a non-zero stable
+     * uint64 that can later be reused in ServerStaticLobby and
+     * client CSOCitadelLobby.
+     */
+    const matchId =
+        100000000n +
+        (
+            partyId %
+            900000000n
+        );
+
+    if (
+        allocationAccepted &&
+        allocationServerSteamId ===
+            currentServer &&
+        allocationMatchId ==
+            matchId
+    ) {
+        log(
+            "[GS-ALLOC] already accepted match_id=" +
+            matchId
+        );
+
+        return true;
+    }
+
+    const currentTime =
+        now();
+
+    /*
+     * Dedicated sends repeated 4007 keepalives.
+     * Give 10022 time to arrive before resending.
+     */
+    if (
+        allocationServerSteamId ===
+            currentServer &&
+        allocationMatchId ==
+            matchId &&
+        allocationLastSentAt >
+            0 &&
+        currentTime -
+            allocationLastSentAt <
+            10
+    ) {
+        log(
+            "[GS-ALLOC] duplicate 4007 suppressed match_id=" +
+            matchId
+        );
+
+        return true;
+    }
+
+    const payload =
+        encodeAllocateForMatch(
+            matchId
+        );
+
+    log(
+        "[GS-ALLOC] send RAW 10021 server=" +
+        currentServer +
+        " lobby_id=" +
+        partyId +
+        " match_id=" +
+        matchId +
+        " bytes=" +
+        payload.length
+    );
+
+    /*
+     * send() targets the current GC peer.
+     *
+     * Because this handler is executing for GameServer 4007,
+     * the packet is queued to that same GameServer context.
+     */
+    send(
+        10021,
+        payload,
+        true
+    );
+
+    allocationServerSteamId =
+        currentServer;
+
+    allocationMatchId =
+        matchId;
+
+    allocationLastSentAt =
+        currentTime;
+
+    allocationAccepted =
+        false;
+
+    log(
+        "[GS-ALLOC] sequence=4007->4005->10021"
+    );
+
+    return true;
+}

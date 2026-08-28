@@ -1,0 +1,335 @@
+import {
+    requestDeadlockLeaveLobbyRaw
+} from "./modules/RequestDeadlockLeaveLobbyRaw";
+
+import {
+    RequestDeadlockPartySetReadyStateRoute,
+    requestDeadlockPartySetReadyState
+} from "./modules/RequestDeadlockPartySetReadyState";
+
+import {
+    RequestDeadlockPartyLeaveRoute,
+    requestDeadlockPartyLeave
+} from "./modules/RequestDeadlockPartyLeave";
+
+import {
+    RequestDeadlockPartyActionRoute,
+    requestDeadlockPartyAction
+} from "./modules/RequestDeadlockPartyAction";
+
+import {
+    RequestDeadlockProfileRoute,
+    RequestDeadlockProfile
+} from "./modules/RequestDeadlockProfile";
+
+import { gc } from "./framework/gc";
+
+import {
+    RequestDeadlockGetMatchMetaDataRoute,
+    requestDeadlockGetMatchMetaData
+} from "./modules/RequestDeadlockGetMatchMetaData";
+
+import {
+    ClientHelloRoute,
+    requestClientHello
+} from "./modules/RequestClientHello";
+// SKYNET_SOCACHE_REFRESH_28_IMPORT
+import {
+    SOCacheSubscriptionRefreshRoute,
+    requestSOCacheSubscriptionRefresh
+} from "./modules/RequestSOCacheSubscriptionRefresh";
+
+import {
+    RequestDeadlockGetAccountStatsRoute,
+    requestDeadlockGetAccountStats
+} from "./modules/RequestDeadlockGetAccountStats";
+
+import {
+    RequestDeadlockHeroReleaseVoteTallyRoute,
+    requestDeadlockHeroReleaseVoteTally
+} from "./modules/RequestDeadlockHeroReleaseVoteTally";
+
+import {
+    RequestDeadlockGetRankDataRoute,
+    requestDeadlockGetRankData
+} from "./modules/RequestDeadlockGetRankData";
+
+import {
+    RequestDeadlockGetFriendGameStatusRoute,
+    requestDeadlockGetFriendGameStatus
+} from "./modules/RequestDeadlockGetFriendGameStatus";
+
+import {
+    RequestDeadlockGetProfileCardRoute,
+    requestDeadlockGetProfileCard
+} from "./modules/RequestDeadlockGetProfileCard";
+
+import {
+    RequestDeadlockGetMatchHistoryRoute,
+    requestDeadlockGetMatchHistory
+} from "./modules/RequestDeadlockGetMatchHistory";
+
+import {
+    RequestDeadlockGrantForumAccessRoute,
+    requestDeadlockGrantForumAccess
+} from "./modules/RequestDeadlockGrantForumAccess";
+
+import {
+    RequestDeadlockGetAccountMatchReportsRoute,
+    requestDeadlockGetAccountMatchReports
+} from "./modules/RequestDeadlockGetAccountMatchReports";
+
+import {
+    RequestGameServerHelloRoute,
+    requestGameServerHello
+} from "./modules/RequestGameServerHello.ts";
+
+import {
+    RequestDeadlockSubmitPlaytestUserRoute,
+    requestDeadlockSubmitPlaytestUser
+} from "./modules/RequestDeadlockSubmitPlaytestUser.ts";
+
+import {
+    RequestDeadlockStartRankedIntervalRoute,
+    requestDeadlockStartRankedInterval
+} from "./modules/RequestDeadlockStartRankedInterval.ts";
+
+import {
+    RequestDeadlockPartyCreateRoute,
+    requestDeadlockPartyCreate
+} from "./modules/RequestDeadlockPartyCreate";
+
+
+import {
+    RequestDeadlockGetActiveMatchesRoute,
+    requestDeadlockGetActiveMatches
+} from "./modules/RequestDeadlockGetActiveMatches";
+
+import {
+    RequestDeadlockStartMatchmakingRoute,
+    requestDeadlockStartMatchmaking
+} from "./modules/RequestDeadlockStartMatchmaking";
+
+import {
+    RequestDeadlockStopMatchmakingRoute,
+    requestDeadlockStopMatchmaking
+} from "./modules/RequestDeadlockStopMatchmaking";
+
+import {
+    RequestDeadlockUpdateRosterRoute,
+    requestDeadlockUpdateRoster
+} from "./modules/RequestDeadlockUpdateRoster";
+import { RequestDeadlockIsInMatchmakingRoute, requestDeadlockIsInMatchmaking } from "./modules/RequestDeadlockIsInMatchmaking";
+import { RequestDeadlockPartySetModeRoute, requestDeadlockPartySetMode } from "./modules/RequestDeadlockPartySetMode";
+
+import {
+    RequestDeadlockPartyStartMatchRoute,
+    requestDeadlockPartyStartMatch
+} from "./modules/RequestDeadlockPartyStartMatch";
+
+
+// === SKYNET_DEADLOCK_GS_ALLOCATE_RAW_10022_REGISTER_V4_IMPORT ===
+
+// === SKYNET_GS_ALLOCATE_10022_V4_IMPORT ===
+import {
+    RequestDeadlockAllocateForMatchResponseRawRoute,
+    requestDeadlockAllocateForMatchResponseRaw
+} from "./modules/RequestDeadlockAllocateForMatchResponseRaw";
+
+
+// === SKYNET_GS_10023_RAW_V53_IMPORT ===
+import {
+    requestDeadlockServerEnterMatchmakingRaw
+} from "./modules/RequestDeadlockServerEnterMatchmakingRaw";
+
+// === SKYNET_GS_HERO_DATA_10044_V1_IMPORT ===
+import {
+    requestDeadlockPlayerHeroDataRaw
+} from "./modules/RequestDeadlockPlayerHeroDataRaw";
+
+import { requestDeadlockMatchSignoutPermissionRaw } from "./modules/RequestDeadlockMatchSignoutPermissionRaw";
+import { requestDeadlockMatchSignoutRaw } from "./modules/RequestDeadlockMatchSignoutRaw";
+
+export function handle(): boolean {
+    // === SKYNET_RAW_10012_SIGNOUT_PERMISSION_BEGIN ===
+    if (requestDeadlockMatchSignoutPermissionRaw()) {
+        return true;
+    }
+    // === SKYNET_RAW_10012_SIGNOUT_PERMISSION_END ===
+
+    // === SKYNET_RAW_10014_MATCH_SIGNOUT_BEGIN ===
+    if (requestDeadlockMatchSignoutRaw()) {
+        return true;
+    }
+    // === SKYNET_RAW_10014_MATCH_SIGNOUT_END ===
+
+    // === SKYNET_GS_10023_RAW_V53_GATE_BEGIN ===
+    if (
+        messageType() == 10023
+    ) {
+        return requestDeadlockServerEnterMatchmakingRaw();
+    }
+    // === SKYNET_GS_10023_RAW_V53_GATE_END ===
+    // === SKYNET_GS_HERO_DATA_10044_V1_GATE_BEGIN ===
+    // SKYNET_DEADLOCK_LEAVE_MATCH_9015_RAW_V1
+    if (
+        messageType() ==
+        9015
+    ) {
+        return requestDeadlockLeaveLobbyRaw();
+    }
+
+    if (
+        messageType() == 10044
+    ) {
+        return requestDeadlockPlayerHeroDataRaw();
+    }
+    // === SKYNET_GS_HERO_DATA_10044_V1_GATE_END ===
+
+
+    gc.on(
+        RequestDeadlockPartyCreateRoute,
+        requestDeadlockPartyCreate
+    );
+
+    gc.on(
+        RequestDeadlockPartyStartMatchRoute,
+        requestDeadlockPartyStartMatch
+    );
+
+    gc.on(
+        RequestDeadlockPartyActionRoute,
+        requestDeadlockPartyAction
+    );
+
+    gc.on(
+        RequestDeadlockPartyLeaveRoute,
+        requestDeadlockPartyLeave
+    );
+
+    gc.on(
+        RequestDeadlockPartySetReadyStateRoute,
+        requestDeadlockPartySetReadyState
+    );
+
+    gc.on(
+        RequestDeadlockStartRankedIntervalRoute,
+        requestDeadlockStartRankedInterval
+    );
+
+    gc.on(
+        RequestDeadlockSubmitPlaytestUserRoute,
+        requestDeadlockSubmitPlaytestUser
+    );
+
+    gc.on(
+        ClientHelloRoute,
+        requestClientHello
+    );
+
+    // SKYNET_SOCACHE_REFRESH_28_REGISTER
+    gc.on(
+        SOCacheSubscriptionRefreshRoute,
+        requestSOCacheSubscriptionRefresh
+    );
+
+
+
+
+    gc.on(
+        RequestDeadlockGetFriendGameStatusRoute,
+        requestDeadlockGetFriendGameStatus
+    );
+
+    gc.on(
+        RequestDeadlockGetProfileCardRoute,
+        requestDeadlockGetProfileCard
+    );
+
+    gc.on(
+        RequestDeadlockGetMatchHistoryRoute,
+        requestDeadlockGetMatchHistory
+    );
+
+    gc.on(
+        RequestDeadlockGrantForumAccessRoute,
+        requestDeadlockGrantForumAccess
+    );
+
+    gc.on(
+        RequestDeadlockGetAccountMatchReportsRoute,
+        requestDeadlockGetAccountMatchReports
+    );
+
+    gc.on(
+        RequestGameServerHelloRoute,
+        requestGameServerHello
+    );
+
+    // === SKYNET_DEADLOCK_GS_ALLOCATE_RAW_10022_REGISTER_V4_REGISTER ===
+
+
+    gc.on(
+        RequestDeadlockGetActiveMatchesRoute,
+        requestDeadlockGetActiveMatches
+    );
+
+    gc.on(
+        RequestDeadlockGetMatchMetaDataRoute,
+        requestDeadlockGetMatchMetaData
+    );
+
+    gc.on(
+        RequestDeadlockStartMatchmakingRoute,
+        requestDeadlockStartMatchmaking
+    );
+
+    gc.on(
+        RequestDeadlockStopMatchmakingRoute,
+        requestDeadlockStopMatchmaking
+    );
+
+    gc.on(
+        RequestDeadlockUpdateRosterRoute,
+        requestDeadlockUpdateRoster
+    );
+
+    gc.on(
+        RequestDeadlockIsInMatchmakingRoute,
+        requestDeadlockIsInMatchmaking
+    );
+
+    gc.on(
+        RequestDeadlockPartySetModeRoute,
+        requestDeadlockPartySetMode
+    );
+
+    gc.on(
+        RequestDeadlockGetAccountStatsRoute,
+        requestDeadlockGetAccountStats
+    );
+
+    gc.on(
+        RequestDeadlockGetRankDataRoute,
+        requestDeadlockGetRankData
+    );
+
+    gc.on(
+        RequestDeadlockHeroReleaseVoteTallyRoute,
+        requestDeadlockHeroReleaseVoteTally
+    );
+    // === SKYNET_GS_ALLOCATE_RAW_10022_V3_REGISTER_BEGIN ===
+// === SKYNET_GS_ALLOCATE_RAW_10022_V3_REGISTER_END ===
+
+
+    // === SKYNET_GS_ALLOCATE_10022_V4_REGISTER_BEGIN ===
+    gc.on(
+        RequestDeadlockAllocateForMatchResponseRawRoute,
+        requestDeadlockAllocateForMatchResponseRaw
+    );
+    // === SKYNET_GS_ALLOCATE_10022_V4_REGISTER_END ===
+        return gc.dispatch();
+}
+
+export function tick(): void {
+}

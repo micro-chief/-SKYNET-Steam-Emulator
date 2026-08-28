@@ -1,13 +1,108 @@
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Logging.Abstractions;
 using SKYNET_server.Models;
+using Cs2AdjustEquipSlot = Cs2Proto.CMsgAdjustEquipSlot;
+using Cs2AdjustEquipSlots = Cs2Proto.CMsgAdjustEquipSlots;
+using Cs2ApplySticker = Cs2Proto.CMsgApplySticker;
+using Cs2AccountCoPlays = Cs2Proto.CMsgGCCStrike15v2AccountRequestCoPlays;
+using Cs2AcknowledgePenalty = Cs2Proto.CMsgGCCStrike15v2AcknowledgePenalty;
+using Cs2CustomizationNotification = Cs2Proto.CMsgGCItemCustomizationNotification;
+using Cs2EconAccount = Cs2Proto.CSOEconGameAccountClient;
+using Cs2EconEquipSlot = Cs2Proto.CSOEconEquipSlot;
+using Cs2EconItem = Cs2Proto.CSOEconItem;
+using Cs2EventFavoritesRequest = Cs2Proto.CMsgGCCStrike15v2GetEventFavoritesRequest;
+using Cs2EventFavoritesResponse = Cs2Proto.CMsgGCCStrike15v2GetEventFavoritesResponse;
+using Cs2ItemAcknowledged = Cs2Proto.CMsgItemAcknowledged;
+using Cs2MatchEndRunRewardDrops = Cs2Proto.CMsgGCCStrike15v2MatchEndRunRewardDrops;
+using Cs2MatchList = Cs2Proto.CMsgGCCStrike15v2MatchList;
+using Cs2MatchListRequestRecentUserGames = Cs2Proto.CMsgGCCStrike15v2MatchListRequestRecentUserGames;
+using Cs2MatchListRequestTournamentGames = Cs2Proto.CMsgGCCStrike15v2MatchListRequestTournamentGames;
+using Cs2MatchmakingClientHello = Cs2Proto.CMsgGCCStrike15v2MatchmakingGC2ClientHello;
+using Cs2MatchmakingClientReserve = Cs2Proto.CMsgGCCStrike15v2MatchmakingGC2ClientReserve;
+using Cs2MatchmakingStart = Cs2Proto.CMsgGCCStrike15v2MatchmakingStart;
+using Cs2MatchmakingStop = Cs2Proto.CMsgGCCStrike15v2MatchmakingStop;
+using Cs2OpenCrate = Cs2Proto.CMsgOpenCrate;
+using Cs2PlayersProfile = Cs2Proto.CMsgGCCStrike15v2PlayersProfile;
+using Cs2PremierSeasonSummary = Cs2Proto.CMsgGCCStrike15v2PremierSeasonSummary;
+using Cs2PartySearch = Cs2Proto.CMsgGCCStrike15v2PartySearch;
+using Cs2PartySearchResults = Cs2Proto.CMsgGCCStrike15v2PartySearchResults;
+using Cs2PlayerDecalSign = Cs2Proto.CMsgGCCStrike15v2ClientPlayerDecalSign;
+using Cs2PlayerDecalSignature = Cs2Proto.PlayerDecalDigitalSignature;
+using Cs2PersonaDataPublic = Cs2Proto.CSOPersonaDataPublic;
+using Cs2RankUpdate = Cs2Proto.CMsgGCCStrike15v2ClientGCRankUpdate;
+using Cs2RecurringMissionSchema = Cs2Proto.CMsgRecurringMissionSchema;
+using Cs2RequestRecurringMissionSchedule = Cs2Proto.CMsgRequestRecurringMissionSchedule;
+using Cs2ServerReserve = Cs2Proto.CMsgGCCStrike15v2MatchmakingGC2ServerReserve;
+using Cs2ServerReservationResponse = Cs2Proto.CMsgGCCStrike15v2MatchmakingServerReservationResponse;
+using Cs2ServerClientValidate = Cs2Proto.CMsgGCCStrike15v2Server2GCClientValidate;
+using Cs2SetItemPosition = Cs2Proto.CMsgSetItemPositions.ItemPosition;
+using Cs2SetItemPositions = Cs2Proto.CMsgSetItemPositions;
+using Cs2StoreGetUserData = Cs2Proto.CMsgStoreGetUserData;
+using Cs2StoreGetUserDataResponse = Cs2Proto.CMsgStoreGetUserDataResponse;
+using Cs2VolatileShopSubscribe = Cs2Proto.CMsgGCCStrike15v2VolatileShopSubscribe;
 
 namespace SKYNET_server.Services;
 
 public static class GcScriptSelfCheck
 {
     private const uint DotaAppId = 570;
+    private const uint Cs2AppId = 730;
     private const ulong TestSteamId = 76561197960287930UL;
+
+    public static bool RunCs2(Action<string> write)
+    {
+        var contentRoot = ResolveContentRoot(Directory.GetCurrentDirectory());
+        write($"CS2 GC self-check content root: {contentRoot}");
+        var selfCheckRoot = Path.Combine(Path.GetTempPath(), "skynet-cs2-gc-selfcheck", Guid.NewGuid().ToString("N"));
+        var inventoryDbPath = Path.Combine(selfCheckRoot, "cs2.db");
+        Cs2GcRuntimeServices.UseInventoryStore(new Cs2InventoryStore(inventoryDbPath));
+        Cs2GcRuntimeServices.UseMatchStore(new Cs2MatchStore(inventoryDbPath));
+
+        var trace = new GameCoordinatorTraceService();
+        var plugin = new GameCoordinatorScriptPlugin(
+            new SelfCheckEnvironment(contentRoot),
+            NullLogger<GameCoordinatorScriptPlugin>.Instance,
+            trace);
+        var context = new GameCoordinatorContext
+        {
+            AppId = Cs2AppId,
+            SteamId = TestSteamId,
+            AccountId = 15892202,
+            PersonaName = "GcScriptSelfCheck CS2",
+            ClientIp = "127.0.0.1"
+        };
+        var serverContext = new GameCoordinatorContext
+        {
+            AppId = Cs2AppId,
+            SteamId = 85568392920027015UL,
+            SessionSteamId = TestSteamId,
+            AccountId = 0,
+            PersonaName = "GcScriptSelfCheck CS2 Dedicated",
+            ClientIp = "127.0.0.1"
+        };
+
+        var ok = ExpectCs2LegacyMatchStoreMigration(selfCheckRoot, write);
+        ok &= ExpectCs2GameServerRegistrationFlow(plugin, serverContext, write);
+        ok &= ExpectCs2BootstrapFlow(plugin, context, write);
+        ok &= ExpectCs2InventoryScreenRequests(plugin, context, write);
+        ok &= ExpectCs2EquipPersistenceFlow(plugin, context, serverContext, contentRoot, inventoryDbPath, write);
+        ok &= ExpectCs2ItemCustomizationFlow(plugin, context, serverContext, write);
+        ok &= ExpectCs2MatchmakingFlow(
+            plugin,
+            context,
+            write,
+            serverContext,
+            contentRoot,
+            inventoryDbPath);
+        ok &= ExpectCs2MatchCompletionFlow(plugin, context, serverContext, write);
+        foreach (var entry in trace.GetSince(0))
+        {
+            write($"trace {entry.Kind} app={entry.AppId} msg={entry.MessageType} size={entry.Size} {entry.Detail}");
+        }
+
+        write(ok ? "PASS" : "FAIL");
+        return ok;
+    }
 
     public static bool Run(Action<string> write)
     {
@@ -44,8 +139,19 @@ public static class GcScriptSelfCheck
             PersonaName = "GcScriptFriend",
             ClientIp = "192.168.212.253"
         };
+        var cs2Context = new GameCoordinatorContext
+        {
+            AppId = Cs2AppId,
+            SteamId = TestSteamId,
+            AccountId = 15892202,
+            PersonaName = "GcScriptSelfCheck CS2",
+            ClientIp = "127.0.0.1"
+        };
         var queuedMessages = new List<(ulong SteamId, ApiGCMessage Message)>();
         var selfCheckDb = Path.Combine(Path.GetTempPath(), "skynet-gc-selfcheck", Guid.NewGuid().ToString("N"), "dota.db");
+        var cs2SelfCheckDb = Path.Combine(Path.GetDirectoryName(selfCheckDb)!, "cs2.db");
+        Cs2GcRuntimeServices.UseInventoryStore(new Cs2InventoryStore(cs2SelfCheckDb));
+        Cs2GcRuntimeServices.UseMatchStore(new Cs2MatchStore(cs2SelfCheckDb));
         DotaStatsAccountIdentity? ResolveIdentity(uint accountId)
         {
             if (accountId == context.AccountId)
@@ -186,6 +292,9 @@ public static class GcScriptSelfCheck
         ok &= ExpectResponse(plugin, context, 8944, 8945, 1, write);
         ok &= ExpectResponse(plugin, context, 9023, 9024, 1, write);
         ok &= ExpectUnhandled(plugin, context, 999999, write);
+        ok &= ExpectCs2BootstrapFlow(plugin, cs2Context, write);
+        ok &= ExpectCs2InventoryScreenRequests(plugin, cs2Context, write);
+        ok &= ExpectCs2MatchmakingFlow(plugin, cs2Context, write);
 
         foreach (var entry in trace.GetSince(0))
         {
@@ -225,6 +334,980 @@ public static class GcScriptSelfCheck
         var matching = response.Messages.Count(message => message.MessageType == expectedResponseType && message.Protobuf);
         var ok = response.Handled && response.Messages.Count == expectedCount && matching == expectedCount;
         write($"{requestType} -> handled={response.Handled}, messages={response.Messages.Count}, expected={expectedResponseType}, ok={ok}");
+        return ok;
+    }
+
+    private static bool ExpectCs2BootstrapFlow(
+        GameCoordinatorScriptPlugin plugin,
+        GameCoordinatorContext context,
+        Action<string> write)
+    {
+        var bootstrap = plugin.Exchange(context, Request(4006));
+        var bootstrapTypes = bootstrap.Messages.Select(message => message.MessageType).ToArray();
+        var welcomeMessage = bootstrap.Messages.FirstOrDefault(message => message.MessageType == 4004);
+        var welcome = welcomeMessage == null ? null : Deserialize<Cs2ClientWelcome>(welcomeMessage.PayloadBase64);
+
+        var helloResponse = plugin.Exchange(context, Request(9109));
+        var helloMessage = helloResponse.Messages.SingleOrDefault(message => message.MessageType == 9110);
+        var hello = helloMessage == null
+            ? null
+            : Deserialize<Cs2MatchmakingClientHello>(helloMessage.PayloadBase64);
+
+        var profileResponse = plugin.Exchange(context, Request(9127));
+        var profileMessage = profileResponse.Messages.SingleOrDefault(message => message.MessageType == 9128);
+        var profile = profileMessage == null
+            ? null
+            : Deserialize<Cs2PlayersProfile>(profileMessage.PayloadBase64);
+        var inventoryCache = welcome?.OutofdateSubscribedCaches.SingleOrDefault();
+        var inventoryObjects = inventoryCache?.Objects.SingleOrDefault(item => item.TypeId == 1);
+        var personaObjects = inventoryCache?.Objects.SingleOrDefault(item => item.TypeId == 2);
+        var equipObjects = inventoryCache?.Objects.SingleOrDefault(item => item.TypeId == 3);
+        var accountObjects = inventoryCache?.Objects.SingleOrDefault(item => item.TypeId == 7);
+        var inventoryItems = inventoryObjects?.ObjectDatas
+            .Select(DeserializeBytes<Cs2EconItem>)
+            .ToArray() ?? Array.Empty<Cs2EconItem>();
+        var account = accountObjects?.ObjectDatas.Count == 1
+            ? DeserializeBytes<Cs2EconAccount>(accountObjects.ObjectDatas[0])
+            : null;
+        var persona = personaObjects?.ObjectDatas.Count == 1
+            ? DeserializeBytes<Cs2PersonaDataPublic>(personaObjects.ObjectDatas[0])
+            : null;
+        var bootstrapHelloMessage = bootstrap.Messages.SingleOrDefault(message => message.MessageType == 9110);
+        var bootstrapHello = bootstrapHelloMessage == null
+            ? null
+            : Deserialize<Cs2MatchmakingClientHello>(bootstrapHelloMessage.PayloadBase64);
+        var bootstrapRankMessage = bootstrap.Messages.SingleOrDefault(message => message.MessageType == 9194);
+        var bootstrapRank = bootstrapRankMessage == null
+            ? null
+            : Deserialize<Cs2RankUpdate>(bootstrapRankMessage.PayloadBase64);
+        var catalog = Cs2GcRuntimeServices.ItemCatalog.Items;
+        var inventoryMatchesCatalog = catalog.Count > 0
+            ? inventoryItems.Length == catalog.Count &&
+              inventoryItems.Select(item => item.DefIndex).SequenceEqual(catalog.Select(item => item.DefIndex)) &&
+              inventoryItems.Zip(catalog).All(pair =>
+                  pair.First.Attributes.Count == pair.Second.Attributes.Count &&
+                  pair.First.Attributes.Zip(pair.Second.Attributes).All(attributePair =>
+                      attributePair.First.DefIndex == attributePair.Second.DefIndex &&
+                      ReadUInt32LittleEndian(attributePair.First.ValueBytes) == attributePair.Second.ValueBits))
+            : inventoryItems.Select(item => item.DefIndex).SequenceEqual(new uint[] { 7, 9, 507 });
+
+        var ok = bootstrap.Handled
+            && bootstrapTypes.SequenceEqual(new uint[] { 4009, 4004, 4009, 9110, 9194 })
+            && welcome != null
+            && welcome.Rtime32GcWelcomeTimestamp != 0
+            && inventoryCache?.OwnerSoid?.Type == 1
+            && inventoryCache.OwnerSoid.Id == context.SteamId
+            && inventoryMatchesCatalog
+            && inventoryItems.All(item => item.AccountId == context.AccountId)
+            && inventoryItems.All(item => item.Id != 0)
+            && persona?.PlayerLevel == 1
+            && persona.ElevatedState
+            && account?.ElevatedState == 1
+            && equipObjects != null
+            && bootstrapHello?.AccountId == context.AccountId
+            && bootstrapRank?.Rankings.SingleOrDefault()?.AccountId == context.AccountId
+            && helloResponse.Handled
+            && helloResponse.Messages.Count == 1
+            && hello?.AccountId == context.AccountId
+            && !hello.ShouldSerializePenaltySeconds()
+            && !hello.ShouldSerializePenaltyReason()
+            && hello.VacBanned == 0
+            && hello.Ranking?.AccountId == context.AccountId
+            && profileResponse.Handled
+            && profileResponse.Messages.Count == 1
+            && profile?.AccountProfiles.Count == 1
+            && profile.AccountProfiles[0].AccountId == context.AccountId;
+
+        write(
+            $"CS2 bootstrap -> handled={bootstrap.Handled}, messages=[{string.Join(',', bootstrapTypes)}], " +
+            $"inventoryItems={inventoryItems.Length}, personaSO={persona != null}, accountSO={account != null}, equipSO={equipObjects != null}, " +
+            $"owner={inventoryCache?.OwnerSoid?.Id}, " +
+            $"helloAccount={hello?.AccountId}, profileCount={profile?.AccountProfiles.Count ?? 0}, ok={ok}");
+        return ok;
+    }
+
+    private static bool ExpectCs2GameServerRegistrationFlow(
+        GameCoordinatorScriptPlugin plugin,
+        GameCoordinatorContext context,
+        Action<string> write)
+    {
+        var request = new Cs2ServerHello
+        {
+            Version = 2000832,
+            ClientLauncher = 3,
+            SocacheControl = 1
+        };
+        var response = plugin.Exchange(context, Request(4007, Serialize(request)));
+        var welcomeMessage = response.Messages.SingleOrDefault(message => message.MessageType == 4005);
+        var welcome = welcomeMessage == null
+            ? null
+            : Deserialize<Cs2ClientWelcome>(welcomeMessage.PayloadBase64);
+        var registration = Cs2GcRuntimeServices.RegisteredGameServer;
+        var playerCache = welcome?.OutofdateSubscribedCaches
+            .SingleOrDefault(cache => cache.OwnerSoid?.Id == context.SessionSteamId);
+        var ok = response.Handled
+            && response.Messages.Count == 1
+            && welcome?.Version == request.Version
+            && registration?.ServerId == context.SteamId
+            && registration.SessionSteamId == context.SessionSteamId
+            && playerCache != null
+            && registration.Version == request.Version
+            && registration.ServerAddress == "127.0.0.1:27015";
+
+        write(
+            $"CS2 game server registration -> handled={response.Handled}, welcomeVersion={welcome?.Version}, " +
+            $"serverId={registration?.ServerId}, playerCache={playerCache != null}, address={registration?.ServerAddress}, ok={ok}");
+        return ok;
+    }
+
+    private static bool ExpectCs2InventoryScreenRequests(
+        GameCoordinatorScriptPlugin plugin,
+        GameCoordinatorContext context,
+        Action<string> write)
+    {
+        var shopRequest = new Cs2VolatileShopSubscribe
+        {
+            Defidx = 4040,
+            Psid = context.SteamId
+        };
+        var shopResponse = plugin.Exchange(context, Request(9228, Serialize(shopRequest)));
+
+        var recurringResponse = plugin.Exchange(
+            context,
+            Request(9225, Serialize(new Cs2RequestRecurringMissionSchedule())));
+        var recurringMessage = recurringResponse.Messages.SingleOrDefault(message => message.MessageType == 9226);
+        var recurring = recurringMessage == null
+            ? null
+            : Deserialize<Cs2RecurringMissionSchema>(recurringMessage.PayloadBase64);
+
+        var storeResponse = plugin.Exchange(
+            context,
+            Request(2500, Serialize(new Cs2StoreGetUserData { Currency = 3 })));
+        var storeMessage = storeResponse.Messages.SingleOrDefault(message => message.MessageType == 2501);
+        var store = storeMessage == null
+            ? null
+            : Deserialize<Cs2StoreGetUserDataResponse>(storeMessage.PayloadBase64);
+
+        var favoritesResponse = plugin.Exchange(
+            context,
+            Request(9201, Serialize(new Cs2EventFavoritesRequest { AllEvents = true })));
+        var favoritesMessage = favoritesResponse.Messages.SingleOrDefault(message => message.MessageType == 9203);
+        var favorites = favoritesMessage == null
+            ? null
+            : Deserialize<Cs2EventFavoritesResponse>(favoritesMessage.PayloadBase64);
+
+        var rankRequest = new Cs2RankUpdate();
+        rankRequest.Rankings.Add(new Cs2Proto.PlayerRankingInfo
+        {
+            AccountId = context.AccountId,
+            RankTypeId = 6
+        });
+        var rankResponse = plugin.Exchange(context, Request(9194, Serialize(rankRequest)));
+        var rankMessage = rankResponse.Messages.SingleOrDefault(message => message.MessageType == 9194);
+        var rank = rankMessage == null
+            ? null
+            : Deserialize<Cs2RankUpdate>(rankMessage.PayloadBase64);
+
+        var tournamentResponse = plugin.Exchange(
+            context,
+            Request(9146, Serialize(new Cs2MatchListRequestTournamentGames { Eventid = 0 })));
+        var tournamentMessage = tournamentResponse.Messages.SingleOrDefault(message => message.MessageType == 9139);
+        var tournament = tournamentMessage == null
+            ? null
+            : Deserialize<Cs2MatchList>(tournamentMessage.PayloadBase64);
+
+        var recentResponse = plugin.Exchange(
+            context,
+            Request(9141, Serialize(new Cs2MatchListRequestRecentUserGames { Accountid = context.AccountId })));
+        var recentMessage = recentResponse.Messages.SingleOrDefault(message => message.MessageType == 9139);
+        var recent = recentMessage == null
+            ? null
+            : Deserialize<Cs2MatchList>(recentMessage.PayloadBase64);
+
+        var coPlaysResponse = plugin.Exchange(context, Request(9193, Serialize(new Cs2AccountCoPlays())));
+        var coPlaysMessage = coPlaysResponse.Messages.SingleOrDefault(message => message.MessageType == 9193);
+        var coPlays = coPlaysMessage == null
+            ? null
+            : Deserialize<Cs2AccountCoPlays>(coPlaysMessage.PayloadBase64);
+
+        var partySearchResponse = plugin.Exchange(
+            context,
+            Request(9191, Serialize(new Cs2PartySearch { Ver = 14177, Apr = 1, GameType = 8 })));
+        var partySearchMessage = partySearchResponse.Messages.SingleOrDefault(message => message.MessageType == 9191);
+        var partySearch = partySearchMessage == null
+            ? null
+            : Deserialize<Cs2PartySearchResults>(partySearchMessage.PayloadBase64);
+
+        var predictionsResponse = plugin.Exchange(
+            context,
+            Request(9160, Serialize(new Cs2TournamentPredictions { Eventid = 26 })));
+        var predictionsMessage = predictionsResponse.Messages.SingleOrDefault(message => message.MessageType == 9160);
+        var predictions = predictionsMessage == null
+            ? null
+            : Deserialize<Cs2TournamentPredictions>(predictionsMessage.PayloadBase64);
+        var penaltyResponse = plugin.Exchange(
+            context,
+            Request(9171, Serialize(new Cs2AcknowledgePenalty { Acknowledged = 1 })));
+        var premierResponse = plugin.Exchange(
+            context,
+            Request(9224, Serialize(new Cs2PremierSeasonSummary
+            {
+                AccountId = context.AccountId,
+                SeasonId = 14
+            })));
+        var premierMessage = premierResponse.Messages.SingleOrDefault(message => message.MessageType == 9224);
+        var premier = premierMessage == null
+            ? null
+            : Deserialize<Cs2PremierSeasonSummary>(premierMessage.PayloadBase64);
+
+        var ok = shopResponse.Handled
+            && shopResponse.Messages.Count == 0
+            && recurringResponse.Handled
+            && recurringResponse.Messages.Count == 1
+            && recurring?.Missions.Count == 0
+            && storeResponse.Handled
+            && storeResponse.Messages.Count == 1
+            && store?.Result == 1
+            && store.CurrencyDeprecated == 3
+            && favoritesResponse.Handled
+            && favoritesResponse.Messages.Count == 1
+            && favorites?.JsonFavorites == "[]"
+            && rankResponse.Handled
+            && rankResponse.Messages.Count == 1
+            && rank?.Rankings.Count == 1
+            && rank.Rankings[0].AccountId == context.AccountId
+            && rank.Rankings[0].RankTypeId == 6
+            && rank.Rankings[0].RankId == 1
+            && tournamentResponse.Handled
+            && tournamentResponse.Messages.Count == 1
+            && tournament?.Msgrequestid == 9146
+            && tournament.Accountid == context.AccountId
+            && tournament.Servertime != 0
+            && tournament.Matches.Count == 0
+            && recentResponse.Handled
+            && recentResponse.Messages.Count == 1
+            && recent?.Msgrequestid == 9141
+            && recent.Accountid == context.AccountId
+            && coPlaysResponse.Handled
+            && coPlaysResponse.Messages.Count == 1
+            && coPlays?.Players.Count == 0
+            && coPlays.Servertime != 0
+            && partySearchResponse.Handled
+            && partySearchResponse.Messages.Count == 1
+            && partySearch?.Entries.Count == 0
+            && predictionsResponse.Handled
+            && predictionsResponse.Messages.Count == 1
+            && predictions?.Eventid == 26
+            && penaltyResponse.Handled
+            && penaltyResponse.Messages.Count == 0
+            && premierResponse.Handled
+            && premierResponse.Messages.Count == 1
+            && premier?.AccountId == context.AccountId
+            && premier.SeasonId == 14
+            && premier.DataPerWeeks.Count == 0
+            && premier.DataPerMaps.Count == 0;
+
+        write(
+            $"CS2 inventory screen requests -> shopSubscription={shopResponse.Handled}/9228/noReply={shopResponse.Messages.Count == 0}, " +
+            $"bootstrap=[9226:{recurringResponse.Handled},2501:{storeResponse.Handled},9203:{favoritesResponse.Handled}], " +
+            $"social=[9141:{recentResponse.Handled},9193:{coPlaysResponse.Handled},9191:{partySearchResponse.Handled},9160:{predictionsResponse.Handled}], " +
+            $"rank={rankResponse.Handled}/9194, tournaments={tournamentResponse.Handled}/9139, " +
+            $"penaltyAck={penaltyResponse.Handled}/9171, premier={premierResponse.Handled}/9224, ok={ok}");
+        return ok;
+    }
+
+    private static bool ExpectCs2LegacyMatchStoreMigration(string selfCheckRoot, Action<string> write)
+    {
+        var legacyPath = Path.Combine(selfCheckRoot, "legacy-cs2.db");
+        Directory.CreateDirectory(selfCheckRoot);
+        using (var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={legacyPath}"))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = """
+                CREATE TABLE cs2_match_players (
+                    reservation_id TEXT NOT NULL,
+                    account_id INTEGER NOT NULL,
+                    PRIMARY KEY (reservation_id, account_id)
+                );
+                """;
+            command.ExecuteNonQuery();
+        }
+
+        _ = new Cs2MatchStore(legacyPath);
+        var hasSteamId = false;
+        using (var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={legacyPath}"))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = "PRAGMA table_info(cs2_match_players);";
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                hasSteamId |= string.Equals(
+                    reader.GetString(1),
+                    "steam_id",
+                    StringComparison.OrdinalIgnoreCase);
+            }
+        }
+
+        write($"CS2 legacy match-store migration -> steamIdColumn={hasSteamId}, ok={hasSteamId}");
+        return hasSteamId;
+    }
+
+    private static bool ExpectCs2MatchmakingFlow(
+        GameCoordinatorScriptPlugin plugin,
+        GameCoordinatorContext context,
+        Action<string> write,
+        GameCoordinatorContext? serverContext = null,
+        string? contentRoot = null,
+        string? databasePath = null)
+    {
+        var request = new Cs2MatchmakingStart
+        {
+            GameType = 8,
+            ClientVersion = 2000832,
+            AccountIds = new[] { context.AccountId }
+        };
+
+        var response = plugin.Exchange(context, Request(9101, Serialize(request)));
+        var messageTypes = response.Messages.Select(message => message.MessageType).ToArray();
+        var reserveMessage = response.Messages.SingleOrDefault(message => message.MessageType == 9107);
+        var reserve = reserveMessage == null
+            ? null
+            : Deserialize<Cs2MatchmakingClientReserve>(reserveMessage.PayloadBase64);
+        var storedPending = Cs2GcRuntimeServices.GetOngoingReservation(context.AccountId);
+        var reconnectBeforeConfirmation = plugin.Exchange(context, Request(9109));
+        var reconnectBeforeMessage = reconnectBeforeConfirmation.Messages
+            .SingleOrDefault(message => message.MessageType == 9110);
+        var reconnectBefore = reconnectBeforeMessage == null
+            ? null
+            : Deserialize<Cs2MatchmakingClientHello>(reconnectBeforeMessage.PayloadBase64);
+
+        var extended = serverContext != null
+            && !string.IsNullOrWhiteSpace(contentRoot)
+            && !string.IsNullOrWhiteSpace(databasePath)
+            && reserve != null;
+        ApiGCExchangeResponse? confirmation = null;
+        Cs2ServerReserve? queuedServerReservation = null;
+        Cs2ActiveReservation? storedConfirmed = null;
+        Cs2MatchmakingClientHello? reconnectAfterRestart = null;
+        ApiGCExchangeResponse? abandon = null;
+        Cs2ActiveReservation? storedAfterAbandon = storedPending;
+        Cs2MatchmakingClientHello? helloAfterAbandon = null;
+        GameCoordinatorScriptPlugin activePlugin = plugin;
+
+        if (extended)
+        {
+            var serverPoll = plugin.Poll(serverContext!);
+            var queuedServerMessage = serverPoll.Messages
+                .SingleOrDefault(message => message.MessageType == 9105);
+            queuedServerReservation = queuedServerMessage == null
+                ? null
+                : Deserialize<Cs2ServerReserve>(queuedServerMessage.PayloadBase64);
+
+            var serverResponse = new Cs2ServerReservationResponse
+            {
+                Reservationid = reserve!.Reservationid,
+                Reservation = reserve.Reservation,
+                Map = reserve.Map,
+                GcReservationSent = reserve.Reservationid,
+                ServerVersion = reserve.Reservation?.ServerVersion ?? 0
+            };
+            confirmation = plugin.Exchange(serverContext!, Request(9106, Serialize(serverResponse)));
+            storedConfirmed = Cs2GcRuntimeServices.GetOngoingReservation(context.AccountId);
+
+            Cs2GcRuntimeServices.UseMatchStore(new Cs2MatchStore(databasePath!));
+            activePlugin = new GameCoordinatorScriptPlugin(
+                new SelfCheckEnvironment(contentRoot!),
+                NullLogger<GameCoordinatorScriptPlugin>.Instance,
+                new GameCoordinatorTraceService());
+            var restartedHelloResponse = activePlugin.Exchange(context, Request(9109));
+            var restartedHelloMessage = restartedHelloResponse.Messages
+                .SingleOrDefault(message => message.MessageType == 9110);
+            reconnectAfterRestart = restartedHelloMessage == null
+                ? null
+                : Deserialize<Cs2MatchmakingClientHello>(restartedHelloMessage.PayloadBase64);
+
+            abandon = activePlugin.Exchange(
+                context,
+                Request(9102, Serialize(new Cs2MatchmakingStop { Abandon = 1 })));
+            storedAfterAbandon = Cs2GcRuntimeServices.GetOngoingReservation(context.AccountId);
+            var clearedHelloResponse = activePlugin.Exchange(context, Request(9109));
+            var clearedHelloMessage = clearedHelloResponse.Messages
+                .SingleOrDefault(message => message.MessageType == 9110);
+            helloAfterAbandon = clearedHelloMessage == null
+                ? null
+                : Deserialize<Cs2MatchmakingClientHello>(clearedHelloMessage.PayloadBase64);
+        }
+
+        var stop = extended
+            ? abandon!
+            : activePlugin.Exchange(context, Request(9102));
+        var ping = activePlugin.Exchange(context, Request(9103));
+
+        var ok = response.Handled
+            && messageTypes.SequenceEqual(new uint[] { 9104, 9107, 9104 })
+            && reserve?.ServerAddress == "127.0.0.1:27015"
+            && reserve.Serverid == (Cs2GcRuntimeServices.RegisteredGameServer?.ServerId
+                ?? Cs2GcRuntimeServices.ServerId)
+            && reserve.DirectUdpPort == 27015
+            && reserve.Reservationid != 0
+            && reserve.Reservation?.AccountIds.SequenceEqual(new[] { context.AccountId }) == true
+            && reserve.Reservation.MatchId != 0
+            && reserve.Reservation.GameType == 8
+            && storedPending?.ReservationId == reserve.Reservationid
+            && storedPending.State == Cs2ReservationState.Pending
+            && reconnectBefore?.Ongoingmatch?.Reservationid == reserve.Reservationid
+            && stop.Handled
+            && stop.Messages.Count == 1
+            && stop.Messages[0].MessageType == 9104
+            && ping.Handled
+            && ping.Messages.Count == 1
+            && ping.Messages[0].MessageType == 9104;
+
+        if (extended)
+        {
+            ok = ok
+                && confirmation?.Handled == true
+                && confirmation.Messages.Count == 0
+                && queuedServerReservation != null
+                && queuedServerReservation.MatchId == reserve!.Reservation?.MatchId
+                && queuedServerReservation.AccountIds.SequenceEqual(new[] { context.AccountId })
+                && storedConfirmed?.ReservationId == reserve!.Reservationid
+                && storedConfirmed.State == Cs2ReservationState.Confirmed
+                && reconnectAfterRestart?.Ongoingmatch?.Reservationid == reserve.Reservationid
+                && storedAfterAbandon == null
+                && helloAfterAbandon?.Ongoingmatch == null;
+        }
+
+        write(
+            $"CS2 matchmaking -> handled={response.Handled}, messages=[{string.Join(',', messageTypes)}], " +
+            $"address={reserve?.ServerAddress}, reservation={reserve?.Reservationid}, " +
+            $"pending={storedPending?.State}, confirmed={storedConfirmed?.State}, " +
+            $"serverQueued={queuedServerReservation?.MatchId}, " +
+            $"restartReservation={reconnectAfterRestart?.Ongoingmatch?.Reservationid}, " +
+            $"cleared={storedAfterAbandon == null}, ok={ok}");
+        return ok;
+    }
+
+    private static bool ExpectCs2MatchCompletionFlow(
+        GameCoordinatorScriptPlugin plugin,
+        GameCoordinatorContext context,
+        GameCoordinatorContext serverContext,
+        Action<string> write)
+    {
+        var start = plugin.Exchange(
+            context,
+            Request(9101, Serialize(new Cs2MatchmakingStart
+            {
+                GameType = 8,
+                ClientVersion = 2000832,
+                AccountIds = new[] { context.AccountId }
+            })));
+        var reserveMessage = start.Messages.SingleOrDefault(message => message.MessageType == 9107);
+        var reserve = reserveMessage == null
+            ? null
+            : Deserialize<Cs2MatchmakingClientReserve>(reserveMessage.PayloadBase64);
+        if (reserve == null)
+        {
+            write("CS2 match completion -> no client reservation, ok=False");
+            return false;
+        }
+
+        var serverPoll = plugin.Poll(serverContext);
+        var queuedReservation = serverPoll.Messages
+            .SingleOrDefault(message => message.MessageType == 9105);
+        var serverResponse = new Cs2ServerReservationResponse
+        {
+            Reservationid = reserve.Reservationid,
+            Reservation = reserve.Reservation,
+            Map = reserve.Map,
+            GcReservationSent = reserve.Reservationid,
+            ServerVersion = reserve.Reservation?.ServerVersion ?? 0
+        };
+        var confirmation = plugin.Exchange(
+            serverContext,
+            Request(9106, Serialize(serverResponse)));
+
+        // A hello from the active player binds its account id to the current
+        // SteamID so asynchronous match-end updates have an exact destination.
+        var activeHello = plugin.Exchange(context, Request(9109));
+        var matchEndRequest = new Cs2MatchEndRunRewardDrops { Serverinfo = serverResponse };
+
+        var rogueServer = new GameCoordinatorContext
+        {
+            AppId = Cs2AppId,
+            SteamId = serverContext.SteamId + 1,
+            AccountId = 0,
+            PersonaName = "GcScriptSelfCheck CS2 Rogue Dedicated",
+            ClientIp = serverContext.ClientIp
+        };
+        var rejectedFinish = plugin.Exchange(
+            rogueServer,
+            Request(9136, Serialize(matchEndRequest)));
+        var retainedAfterRogue = Cs2GcRuntimeServices.GetOngoingReservation(context.AccountId);
+
+        var finish = plugin.Exchange(
+            serverContext,
+            Request(9136, Serialize(matchEndRequest)));
+        var storedAfterFinish = Cs2GcRuntimeServices.GetOngoingReservation(context.AccountId);
+        var clientPoll = plugin.Poll(context);
+        var clientMessageTypes = clientPoll.Messages.Select(message => message.MessageType).ToArray();
+        var rankMessage = clientPoll.Messages.SingleOrDefault(message => message.MessageType == 9194);
+        var rank = rankMessage == null ? null : Deserialize<Cs2RankUpdate>(rankMessage.PayloadBase64);
+        var clearedHelloResponse = plugin.Exchange(context, Request(9109));
+        var clearedHelloMessage = clearedHelloResponse.Messages
+            .SingleOrDefault(message => message.MessageType == 9110);
+        var clearedHello = clearedHelloMessage == null
+            ? null
+            : Deserialize<Cs2MatchmakingClientHello>(clearedHelloMessage.PayloadBase64);
+
+        var ok = start.Handled
+            && queuedReservation != null
+            && confirmation.Handled
+            && confirmation.Messages.Count == 0
+            && activeHello.Handled
+            && rejectedFinish.Handled
+            && rejectedFinish.Messages.Count == 0
+            && retainedAfterRogue?.ReservationId == reserve.Reservationid
+            && finish.Handled
+            && finish.Messages.Count == 0
+            && storedAfterFinish == null
+            && clientMessageTypes.SequenceEqual(new uint[] { 9104, 9194 })
+            && rank?.Rankings.Count == 1
+            && rank.Rankings[0].AccountId == context.AccountId
+            && clearedHello?.Ongoingmatch == null;
+
+        write(
+            $"CS2 match completion -> reservation={reserve.Reservationid}, " +
+            $"rogueRetained={retainedAfterRogue != null}, queued=[{string.Join(',', clientMessageTypes)}], " +
+            $"cleared={storedAfterFinish == null}, ok={ok}");
+        return ok;
+    }
+
+    private static bool ExpectCs2EquipPersistenceFlow(
+        GameCoordinatorScriptPlugin plugin,
+        GameCoordinatorContext context,
+        GameCoordinatorContext serverContext,
+        string contentRoot,
+        string inventoryDbPath,
+        Action<string> write)
+    {
+        var itemId = 0x7300000000000000UL | ((context.SteamId & 0xffffffffUL) << 16) | 1UL;
+        var request = new Cs2AdjustEquipSlots { ChangeNum = 1 };
+        request.Slots.Add(new Cs2AdjustEquipSlot
+        {
+            ClassId = 2,
+            SlotId = 15,
+            ItemId = itemId
+        });
+
+        var response = plugin.Exchange(context, Request(2531, Serialize(request)));
+        var updateMessage = response.Messages.SingleOrDefault(message => message.MessageType == 26);
+        var update = updateMessage == null
+            ? null
+            : Deserialize<CMsgSOMultipleObjects>(updateMessage.PayloadBase64);
+        var updatedItems = update?.ObjectsModifieds
+            .Where(item => item.TypeId == 1)
+            .Select(item => DeserializeBytes<Cs2EconItem>(item.ObjectData))
+            .ToArray() ?? Array.Empty<Cs2EconItem>();
+        var updatedAk = updatedItems.SingleOrDefault(item => item.Id == itemId);
+        var updatedEquipSlot = update?.ObjectsModifieds
+            .Where(item => item.TypeId == 3)
+            .Select(item => DeserializeBytes<Cs2EconEquipSlot>(item.ObjectData))
+            .SingleOrDefault();
+        var serverPoll = plugin.Poll(serverContext);
+        var serverCacheMessage = serverPoll.Messages
+            .SingleOrDefault(message => message.MessageType == 24);
+        var serverCache = serverCacheMessage == null
+            ? null
+            : Deserialize<CMsgSOCacheSubscribed>(serverCacheMessage.PayloadBase64);
+        var serverItem = serverCache?.Objects
+            .Where(type => type.TypeId == 1)
+            .SelectMany(type => type.ObjectDatas)
+            .Select(DeserializeBytes<Cs2EconItem>)
+            .SingleOrDefault(item => item.Id == itemId);
+        var serverEquipSlot = serverCache?.Objects
+            .Where(type => type.TypeId == 3)
+            .SelectMany(type => type.ObjectDatas)
+            .Select(DeserializeBytes<Cs2EconEquipSlot>)
+            .SingleOrDefault(slot => slot.ClassId == 2 && slot.SlotId == 15);
+        var validationResponse = plugin.Exchange(
+            serverContext,
+            Request(9153, Serialize(new Cs2ServerClientValidate
+            {
+                Accountid = AccountIdFromSteamId(context.SteamId)
+            })));
+        var validationCacheMessage = validationResponse.Messages
+            .SingleOrDefault(message => message.MessageType == 24);
+        var validationCache = validationCacheMessage == null
+            ? null
+            : Deserialize<CMsgSOCacheSubscribed>(validationCacheMessage.PayloadBase64);
+        var validatedItem = validationCache?.Objects
+            .Where(type => type.TypeId == 1)
+            .SelectMany(type => type.ObjectDatas)
+            .Select(DeserializeBytes<Cs2EconItem>)
+            .SingleOrDefault(item => item.Id == itemId);
+
+        var positionRequest = new Cs2SetItemPositions();
+        positionRequest.ItemPositions.Add(new Cs2SetItemPosition { ItemId = itemId, Position = 42 });
+        var positionResponse = plugin.Exchange(context, Request(1077, Serialize(positionRequest)));
+
+        var refreshRequest = new CMsgSOCacheSubscriptionRefresh
+        {
+            OwnerSoid = new CMsgSOIDOwner { Type = 1, Id = context.SteamId }
+        };
+        var refreshResponse = plugin.Exchange(context, Request(28, Serialize(refreshRequest)));
+        var refreshedCacheMessage = refreshResponse.Messages.SingleOrDefault(message => message.MessageType == 24);
+        var refreshedCache = refreshedCacheMessage == null
+            ? null
+            : Deserialize<CMsgSOCacheSubscribed>(refreshedCacheMessage.PayloadBase64);
+        var refreshedAk = refreshedCache?.Objects
+            .Where(type => type.TypeId == 1)
+            .SelectMany(type => type.ObjectDatas)
+            .Select(DeserializeBytes<Cs2EconItem>)
+            .SingleOrDefault(item => item.Id == itemId);
+
+        var verifyResponse = plugin.Exchange(context, Request(1005));
+        var acknowledgeResponse = plugin.Exchange(
+            context,
+            Request(1087, Serialize(new Cs2ItemAcknowledged())));
+
+        var invalidRequest = new Cs2AdjustEquipSlots { ChangeNum = 2 };
+        invalidRequest.Slots.Add(new Cs2AdjustEquipSlot
+        {
+            ClassId = 3,
+            SlotId = 15,
+            ItemId = (itemId & ~0xFFFFUL) | 0xFFFFUL
+        });
+        var invalidResponse = plugin.Exchange(context, Request(2531, Serialize(invalidRequest)));
+        var stored = Cs2GcRuntimeServices.GetEquipment(context.SteamId);
+
+        // Re-open the database and rebuild the script runtime. This proves the
+        // loadout is not merely retained in TypeScript memory.
+        Cs2GcRuntimeServices.UseInventoryStore(new Cs2InventoryStore(inventoryDbPath));
+        var restarted = new GameCoordinatorScriptPlugin(
+            new SelfCheckEnvironment(contentRoot),
+            NullLogger<GameCoordinatorScriptPlugin>.Instance,
+            new GameCoordinatorTraceService());
+        var reconnect = restarted.Exchange(context, Request(4006));
+        var welcomeMessage = reconnect.Messages.SingleOrDefault(message => message.MessageType == 4004);
+        var welcome = welcomeMessage == null ? null : Deserialize<Cs2ClientWelcome>(welcomeMessage.PayloadBase64);
+        var reloadedItems = welcome?.OutofdateSubscribedCaches
+            .SelectMany(cache => cache.Objects)
+            .Where(type => type.TypeId == 1)
+            .SelectMany(type => type.ObjectDatas)
+            .Select(DeserializeBytes<Cs2EconItem>)
+            .ToArray() ?? Array.Empty<Cs2EconItem>();
+        var reloadedAk = reloadedItems.SingleOrDefault(item => item.Id == itemId);
+
+        var currentCacheVersion = Math.Max(stored.Version, Cs2GcRuntimeServices.ItemCatalog.Version);
+        var currentHello = new Cs2ClientHello { Version = 1, ClientSessionNeed = 1 };
+        currentHello.SocacheHaveVersions.Add(new CMsgSOCacheHaveVersion
+        {
+            Soid = new CMsgSOIDOwner { Type = 1, Id = context.SteamId },
+            Version = currentCacheVersion
+        });
+        var currentResponse = restarted.Exchange(context, Request(4006, Serialize(currentHello)));
+        var currentWelcomeMessage = currentResponse.Messages.SingleOrDefault(message => message.MessageType == 4004);
+        var currentWelcome = currentWelcomeMessage == null
+            ? null
+            : Deserialize<Cs2ClientWelcome>(currentWelcomeMessage.PayloadBase64);
+
+        var staleHello = new Cs2ClientHello { Version = 1 };
+        staleHello.SocacheHaveVersions.Add(new CMsgSOCacheHaveVersion
+        {
+            Soid = new CMsgSOIDOwner { Type = 1, Id = context.SteamId },
+            Version = currentCacheVersion - 1
+        });
+        var staleResponse = restarted.Exchange(context, Request(4006, Serialize(staleHello)));
+        var staleWelcomeMessage = staleResponse.Messages.SingleOrDefault(message => message.MessageType == 4004);
+        var staleWelcome = staleWelcomeMessage == null
+            ? null
+            : Deserialize<Cs2ClientWelcome>(staleWelcomeMessage.PayloadBase64);
+
+        var ok = response.Handled
+            && response.Messages.Count == 1
+            && update != null
+            && update.OwnerSoid?.Id == context.SteamId
+            && updatedAk?.EquippedStates.Count == 1
+            && updatedAk.EquippedStates[0].NewClass == 2
+            && updatedAk.EquippedStates[0].NewSlot == 15
+            && updatedEquipSlot?.AccountId == context.AccountId
+            && updatedEquipSlot.ClassId == 2
+            && updatedEquipSlot.SlotId == 15
+            && updatedEquipSlot.ItemId == itemId
+            && serverPoll.Messages.Count == 1
+            && serverCache?.OwnerSoid?.Id == context.SteamId
+            && serverItem?.EquippedStates.Count == 1
+            && serverItem.EquippedStates[0].NewClass == 2
+            && serverItem.EquippedStates[0].NewSlot == 15
+            && serverEquipSlot?.AccountId == context.AccountId
+            && serverEquipSlot.ItemId == itemId
+            && validationResponse.Handled
+            && validationResponse.Messages.Count == 1
+            && validationCache?.OwnerSoid?.Id == context.SteamId
+            && validatedItem?.EquippedStates.Count == 1
+            && validatedItem.EquippedStates[0].NewClass == 2
+            && validatedItem.EquippedStates[0].NewSlot == 15
+            && positionResponse.Handled
+            && positionResponse.Messages.Count == 1
+            && positionResponse.Messages[0].MessageType == 26
+            && refreshResponse.Handled
+            && refreshResponse.Messages.Count == 1
+            && refreshedAk?.Inventory == 42
+            && verifyResponse.Handled
+            && verifyResponse.Messages.Count == 1
+            && verifyResponse.Messages[0].MessageType == 24
+            && acknowledgeResponse.Handled
+            && acknowledgeResponse.Messages.Count == 0
+            && invalidResponse.Handled
+            && invalidResponse.Messages.Count == 0
+            && stored.Version >= 3
+            && stored.Bindings.SingleOrDefault()?.ItemId == itemId
+            && stored.Positions.SingleOrDefault()?.Position == 42
+            && reconnect.Handled
+            && reloadedAk?.EquippedStates.Count == 1
+            && reloadedAk.EquippedStates[0].NewClass == 2
+            && reloadedAk.EquippedStates[0].NewSlot == 15
+            && reloadedAk.Inventory == 42
+            && currentResponse.Handled
+            && currentWelcome?.OutofdateSubscribedCaches.Count == 0
+            && currentWelcome.UptodateSubscribedCaches.Count == 1
+            && currentWelcome.UptodateSubscribedCaches[0].Version == currentCacheVersion
+            && staleResponse.Handled
+            && staleWelcome?.OutofdateSubscribedCaches.Count == 1
+            && staleWelcome.UptodateSubscribedCaches.Count == 0;
+
+        write(
+            $"CS2 equip persistence -> handled={response.Handled}, updateItems={updatedItems.Length}, updateSlot={updatedEquipSlot != null}, " +
+            $"serverCaches={serverPoll.Messages.Count}, serverItem={serverItem != null}, serverSlot={serverEquipSlot != null}, " +
+            $"validatedItem={validatedItem != null}, " +
+            $"storedVersion={stored.Version}, storedBindings={stored.Bindings.Count}, " +
+            $"storedPositions={stored.Positions.Count}, refreshedPosition={refreshedAk?.Inventory}, " +
+            $"currentCaches={currentWelcome?.UptodateSubscribedCaches.Count}, staleCaches={staleWelcome?.OutofdateSubscribedCaches.Count}, " +
+            $"reloadedClass={reloadedAk?.EquippedStates.FirstOrDefault()?.NewClass}, " +
+            $"reloadedSlot={reloadedAk?.EquippedStates.FirstOrDefault()?.NewSlot}, ok={ok}");
+        return ok;
+    }
+
+    private static bool ExpectCs2ItemCustomizationFlow(
+        GameCoordinatorScriptPlugin plugin,
+        GameCoordinatorContext context,
+        GameCoordinatorContext serverContext,
+        Action<string> write)
+    {
+        var catalog = Cs2GcRuntimeServices.ItemCatalog.Items;
+        var stickerIndex = catalog.Select((item, index) => (item, index))
+            .FirstOrDefault(entry => entry.item.Category == "sticker").index;
+        var patchIndex = catalog.Select((item, index) => (item, index))
+            .FirstOrDefault(entry => entry.item.Category == "patch").index;
+        var keychainIndex = catalog.Select((item, index) => (item, index))
+            .FirstOrDefault(entry => entry.item.Category == "keychain").index;
+        var graffitiIndex = catalog.Select((item, index) => (item, index))
+            .FirstOrDefault(entry => entry.item.Category == "graffiti").index;
+        var weaponIndex = catalog.Select((item, index) => (item, index))
+            .FirstOrDefault(entry => entry.item.Category == "weapon").index;
+        var agentIndex = catalog.Select((item, index) => (item, index))
+            .FirstOrDefault(entry => entry.item.Category == "agent").index;
+        var stickerCapsuleIndex = catalog.Select((item, index) => (item, index))
+            .FirstOrDefault(entry => entry.item.Category == "sticker_capsule").index;
+        var caseIndex = catalog.Select((item, index) => (item, index))
+            .FirstOrDefault(entry => entry.item.Category == "case").index;
+        var requiredCategoriesExist = catalog.Count > 0
+            && catalog[stickerIndex].Category == "sticker"
+            && catalog[patchIndex].Category == "patch"
+            && catalog[keychainIndex].Category == "keychain"
+            && catalog[graffitiIndex].Category == "graffiti"
+            && catalog[weaponIndex].Category == "weapon"
+            && catalog[agentIndex].Category == "agent"
+            && catalog[stickerCapsuleIndex].Category == "sticker_capsule"
+            && catalog[caseIndex].Category == "case";
+        if (!requiredCategoriesExist)
+        {
+            write("CS2 item customization -> skipped (fallback catalog)");
+            return true;
+        }
+
+        ulong ItemIdAt(int index) =>
+            0x7300000000000000UL | ((context.SteamId & 0xffffffffUL) << 16) | (uint)(index + 1);
+
+        var operations = new[]
+        {
+            (SourceIndex: stickerIndex, TargetIndex: weaponIndex, Slot: 2U, TargetAttribute: 121U),
+            (SourceIndex: patchIndex, TargetIndex: agentIndex, Slot: 0U, TargetAttribute: 113U),
+            (SourceIndex: keychainIndex, TargetIndex: weaponIndex, Slot: 0U, TargetAttribute: 299U)
+        };
+        var applied = true;
+        var positioned = true;
+        foreach (var operation in operations)
+        {
+            var source = catalog[operation.SourceIndex];
+            var sourceAttribute = source.Category == "keychain" ? 299U : 113U;
+            var kitId = source.Attributes.Single(attribute => attribute.DefIndex == sourceAttribute).ValueBits;
+            var targetItemId = ItemIdAt(operation.TargetIndex);
+            var response = plugin.Exchange(context, Request(1086, Serialize(new Cs2ApplySticker
+            {
+                StickerItemId = ItemIdAt(operation.SourceIndex),
+                ItemItemId = targetItemId,
+                StickerSlot = operation.Slot,
+                StickerWear = 0.05F,
+                StickerRotation = 12.5F,
+                StickerScale = 0.85F,
+                StickerOffsetX = 0.25F,
+                StickerOffsetY = -0.5F,
+                StickerOffsetZ = 0.75F
+            })));
+            var updateMessage = response.Messages.SingleOrDefault(message => message.MessageType == 26);
+            var update = updateMessage == null
+                ? null
+                : Deserialize<CMsgSOMultipleObjects>(updateMessage.PayloadBase64);
+            var target = update?.ObjectsModifieds
+                .Where(item => item.TypeId == 1)
+                .Select(item => DeserializeBytes<Cs2EconItem>(item.ObjectData))
+                .SingleOrDefault(item => item.Id == targetItemId);
+            var targetValue = target?.Attributes
+                .Where(attribute => attribute.DefIndex == operation.TargetAttribute)
+                .Select(attribute => ReadUInt32LittleEndian(attribute.ValueBytes))
+                .SingleOrDefault();
+            var storedValue = Cs2GcRuntimeServices.GetEquipment(context.SteamId).ItemAttributes
+                .Where(attribute => attribute.ItemId == targetItemId && attribute.DefIndex == operation.TargetAttribute)
+                .Select(attribute => attribute.ValueBits)
+                .SingleOrDefault();
+            var positionAttribute = source.Category == "keychain" ? 300U : 278U + operation.Slot * 2U;
+            var storedPosition = Cs2GcRuntimeServices.GetEquipment(context.SteamId).ItemAttributes
+                .Where(attribute => attribute.ItemId == targetItemId && attribute.DefIndex == positionAttribute)
+                .Select(attribute => attribute.ValueBits)
+                .SingleOrDefault();
+            var expectedNotification = source.Category switch
+            {
+                "patch" => 1090U,
+                "keychain" => 1091U,
+                _ => 1086U
+            };
+            var completionMessage = response.Messages.SingleOrDefault(message => message.MessageType == 1090);
+            var completion = completionMessage == null
+                ? null
+                : Deserialize<Cs2CustomizationNotification>(completionMessage.PayloadBase64);
+            applied &= response.Handled
+                && response.Messages.Count == 2
+                && targetValue == kitId
+                && storedValue == kitId
+                && completion?.Request == expectedNotification
+                && completion.ItemIds?.Contains(targetItemId) == true;
+            positioned &= storedPosition == BitConverter.SingleToUInt32Bits(0.25F);
+            plugin.Poll(serverContext);
+        }
+
+        var spray = catalog[graffitiIndex];
+        var sprayItemId = ItemIdAt(graffitiIndex);
+        var sprayKit = spray.Attributes.Single(attribute => attribute.DefIndex == 113).ValueBits;
+        var originalRemaining = spray.Attributes.Single(attribute => attribute.DefIndex == 232).ValueBits;
+        var decalResponse = plugin.Exchange(context, Request(9185, Serialize(new Cs2PlayerDecalSign
+        {
+            Itemid = sprayItemId,
+            Data = new Cs2PlayerDecalSignature
+            {
+                Accountid = context.AccountId,
+                TraceId = 730,
+                Endpos = new[] { 1.0F, 2.0F, 3.0F },
+                Startpos = new[] { 4.0F, 5.0F, 6.0F },
+                Lefts = new[] { 0.0F, 1.0F, 0.0F },
+                Normals = new[] { 0.0F, 0.0F, 1.0F }
+            }
+        })));
+        var signedMessage = decalResponse.Messages.SingleOrDefault(message => message.MessageType == 9185);
+        var signed = signedMessage == null
+            ? null
+            : Deserialize<Cs2PlayerDecalSign>(signedMessage.PayloadBase64);
+        var storedRemaining = Cs2GcRuntimeServices.GetEquipment(context.SteamId).ItemAttributes
+            .Where(attribute => attribute.ItemId == sprayItemId && attribute.DefIndex == 232)
+            .Select(attribute => attribute.ValueBits)
+            .SingleOrDefault();
+        var serverDecal = plugin.Poll(serverContext).Messages
+            .SingleOrDefault(message => message.MessageType == 9185);
+        var graffitiOk = decalResponse.Handled
+            && decalResponse.Messages.Count == 2
+            && signed?.Itemid == sprayItemId
+            && signed.Data?.Accountid == context.AccountId
+            && signed.Data.TxDefidx == sprayKit
+            && signed.Data.TraceId == 730
+            && signed.Data.Signature?.Length == 128
+            && storedRemaining == originalRemaining - 1
+            && serverDecal != null;
+        var openResponse = plugin.Exchange(context, Request(2534, Serialize(new Cs2OpenCrate
+        {
+            SubjectItemId = ItemIdAt(stickerCapsuleIndex)
+        })));
+        var customizationMessage = openResponse.Messages
+            .SingleOrDefault(message => message.MessageType == 1090);
+        var customization = customizationMessage == null
+            ? null
+            : Deserialize<Cs2CustomizationNotification>(customizationMessage.PayloadBase64);
+        var addedMessage = openResponse.Messages.SingleOrDefault(message => message.MessageType == 26);
+        var addedUpdate = addedMessage == null
+            ? null
+            : Deserialize<CMsgSOMultipleObjects>(addedMessage.PayloadBase64);
+        var reward = addedUpdate?.ObjectsAddeds
+            .Where(item => item.TypeId == 1)
+            .Select(item => DeserializeBytes<Cs2EconItem>(item.ObjectData))
+            .SingleOrDefault();
+        var secondOpenResponse = plugin.Exchange(context, Request(2534, Serialize(new Cs2OpenCrate
+        {
+            SubjectItemId = ItemIdAt(stickerCapsuleIndex)
+        })));
+        var secondAddedMessage = secondOpenResponse.Messages.SingleOrDefault(message => message.MessageType == 26);
+        var secondAdded = secondAddedMessage == null
+            ? null
+            : Deserialize<CMsgSOMultipleObjects>(secondAddedMessage.PayloadBase64).ObjectsAddeds
+                .Where(item => item.TypeId == 1)
+                .Select(item => DeserializeBytes<Cs2EconItem>(item.ObjectData))
+                .SingleOrDefault();
+        var caseOpenResponse = plugin.Exchange(context, Request(2534, Serialize(new Cs2OpenCrate
+        {
+            SubjectItemId = ItemIdAt(caseIndex)
+        })));
+        var caseAddedMessage = caseOpenResponse.Messages.SingleOrDefault(message => message.MessageType == 26);
+        var caseReward = caseAddedMessage == null
+            ? null
+            : Deserialize<CMsgSOMultipleObjects>(caseAddedMessage.PayloadBase64).ObjectsAddeds
+                .Where(item => item.TypeId == 1)
+                .Select(item => DeserializeBytes<Cs2EconItem>(item.ObjectData))
+                .SingleOrDefault();
+        var caseNotificationMessage = caseOpenResponse.Messages.SingleOrDefault(message => message.MessageType == 1090);
+        var caseNotification = caseNotificationMessage == null
+            ? null
+            : Deserialize<Cs2CustomizationNotification>(caseNotificationMessage.PayloadBase64);
+        var caseRewardInstance = caseReward == null
+            ? null
+            : Cs2GcRuntimeServices.GetEquipment(context.SteamId).Instances
+                .SingleOrDefault(instance => instance.ItemId == caseReward.Id);
+        var caseRewardTemplate = caseRewardInstance == null
+            ? null
+            : catalog[caseRewardInstance.TemplateIndex];
+        var opened = openResponse.Handled
+            && openResponse.Messages.Select(message => message.MessageType).SequenceEqual(new uint[] { 26, 1090 })
+            && customization?.Request == 1007
+            && customization.ItemIds?.Length == 2
+            && customization.ItemIds[0] == reward?.Id
+            && customization.ItemIds[1] == ItemIdAt(stickerCapsuleIndex)
+            && reward?.DefIndex == catalog[stickerIndex].DefIndex
+            && secondOpenResponse.Handled
+            && secondAdded?.Id != null
+            && secondAdded.Id != reward.Id
+            && caseOpenResponse.Handled
+            && caseReward?.Id != null
+            && caseNotification?.ItemIds?.Length == 2
+            && caseNotification.ItemIds[0] == caseReward.Id
+            && caseNotification.ItemIds[1] == ItemIdAt(caseIndex)
+            && caseRewardTemplate?.Category is "weapon" or "knife" or "glove"
+            && Cs2GcRuntimeServices.GetEquipment(context.SteamId).Instances.Count >= 3;
+        var ok = applied && positioned && graffitiOk && opened;
+        write(
+            $"CS2 item customization -> applied={applied}, positioned={positioned}, graffitiEnvelope={graffitiOk}, " +
+            $"signature={signed?.Data?.Signature?.Length}, remaining={storedRemaining}, server={serverDecal != null}, " +
+            $"opened={opened}, ok={ok}");
         return ok;
     }
 
@@ -1513,6 +2596,13 @@ public static class GcScriptSelfCheck
         return steamId >= 76561197960265728UL
             ? unchecked((uint)(steamId - 76561197960265728UL))
             : unchecked((uint)steamId);
+    }
+
+    private static uint? ReadUInt32LittleEndian(byte[]? value)
+    {
+        return value is { Length: 4 }
+            ? BitConverter.ToUInt32(value, 0)
+            : null;
     }
 
     private static byte[] Serialize<TMessage>(TMessage message)

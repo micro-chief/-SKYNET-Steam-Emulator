@@ -701,6 +701,15 @@ public sealed partial class SteamApiStateService
 
     private uint ResolveGameServerPublicIp(uint candidate, string? remoteIp = null)
     {
+        // SKYNET_DEADLOCK_ADVERTISED_IP_PRIORITY_V29
+        // An explicit admin setting describes the address players must reach.
+        // The HTTP source of a locally injected dedicated can be a Hyper-V/WARP
+        // adapter and must never overwrite that choice.
+        if (TryGetConfiguredAdvertisedServerIp(out var configured))
+        {
+            return configured;
+        }
+
         if (!string.IsNullOrWhiteSpace(remoteIp) &&
             IPAddress.TryParse(remoteIp, out var parsedRemote))
         {
@@ -722,12 +731,114 @@ public sealed partial class SteamApiStateService
             return candidate;
         }
 
-        if (TryGetConfiguredAdvertisedServerIp(out var configured))
+        return candidate != 0 ? candidate : ToUInt32(IPAddress.Loopback);
+    }
+
+    // SKYNET_DEADLOCK_PER_CLIENT_CONNECT_IP_V29_RESOLVER
+    private uint ResolveDeadlockGameServerConnectIp(
+        uint accountId,
+        uint registeredIp)
+    {
+        lock (_sync)
         {
-            return configured;
+            var clientIp =
+                _sessions.Values
+                    .Where(session =>
+                        !session.WebSession &&
+                        SteamIdToAccountId(session.SteamId) == accountId &&
+                        !string.IsNullOrWhiteSpace(session.RemoteIp))
+                    .OrderByDescending(session => session.LastSeenUtc)
+                    .Select(session => session.RemoteIp)
+                    .FirstOrDefault();
+
+            // Requests originating from one of this host's own adapters are a
+            // local-client route, even when Kestrel reports Hyper-V rather than
+            // loopback. Prefer the explicit advertised address for that case.
+            if (
+                IsLoopbackClient(clientIp) ||
+                IsHostInterfaceAddress(clientIp)
+            )
+            {
+                if (TryGetConfiguredAdvertisedServerIp(out var localConfigured))
+                {
+                    return localConfigured;
+                }
+
+                return ToUInt32(IPAddress.Loopback);
+            }
+
+            if (
+                TryPickHostIpForClientSubnet(
+                    clientIp,
+                    out var sameSubnetHostIp
+                ) &&
+                IPAddress.TryParse(
+                    sameSubnetHostIp,
+                    out var parsedSameSubnet
+                )
+            )
+            {
+                return ToUInt32(parsedSameSubnet);
+            }
+
+            if (TryGetConfiguredAdvertisedServerIp(out var configured))
+            {
+                return configured;
+            }
+
+            if (IsUsableIPv4(registeredIp))
+            {
+                return registeredIp;
+            }
+
+            return ToUInt32(IPAddress.Loopback);
+        }
+    }
+
+    private static bool IsHostInterfaceAddress(string? value)
+    {
+        if (
+            string.IsNullOrWhiteSpace(value) ||
+            !IPAddress.TryParse(
+                value.Trim(),
+                out var candidate
+            ) ||
+            candidate.AddressFamily !=
+                AddressFamily.InterNetwork
+        )
+        {
+            return false;
         }
 
-        return candidate != 0 ? candidate : ToUInt32(IPAddress.Loopback);
+        try
+        {
+            foreach (
+                var nic in
+                    NetworkInterface.GetAllNetworkInterfaces()
+            )
+            {
+                foreach (
+                    var unicast in
+                        nic.GetIPProperties().UnicastAddresses
+                )
+                {
+                    if (
+                        unicast.Address.AddressFamily ==
+                            AddressFamily.InterNetwork &&
+                        unicast.Address.Equals(candidate)
+                    )
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+        catch
+        {
+            return false;
+        }
+
+        return false;
     }
 
     private string ResolveDotaGameServerConnectIp(

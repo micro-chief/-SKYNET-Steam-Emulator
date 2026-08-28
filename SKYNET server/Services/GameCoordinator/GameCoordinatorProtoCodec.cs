@@ -112,7 +112,12 @@ public sealed class GameCoordinatorProtoCodec
                 .ToList();
         }
 
-        return new ProtoRegistry(fingerprint, resolved, ambiguous, contracts.Count);
+        return new ProtoRegistry(
+            fingerprint,
+            resolved,
+            ambiguous,
+            contracts.Count,
+            app.ProtoContracts.PreferredNamespaces);
     }
 
     private Type Resolve(uint appId, string typeName)
@@ -216,17 +221,20 @@ public sealed class GameCoordinatorProtoCodec
         private readonly IReadOnlyDictionary<string, Type> _types;
         private readonly IReadOnlyDictionary<string, IReadOnlyList<Type>> _ambiguous;
         private readonly int _contractCount;
+        private readonly IReadOnlyList<string> _preferredNamespaces;
 
         public ProtoRegistry(
             string fingerprint,
             IReadOnlyDictionary<string, Type> types,
             IReadOnlyDictionary<string, IReadOnlyList<Type>> ambiguous,
-            int contractCount)
+            int contractCount,
+            IReadOnlyList<string> preferredNamespaces)
         {
             Fingerprint = fingerprint;
             _types = types;
             _ambiguous = ambiguous;
             _contractCount = contractCount;
+            _preferredNamespaces = preferredNamespaces;
         }
 
         public string Fingerprint { get; }
@@ -245,6 +253,20 @@ public sealed class GameCoordinatorProtoCodec
 
             if (_ambiguous.TryGetValue(typeName, out var candidates))
             {
+                foreach (var preferredNamespace in _preferredNamespaces)
+                {
+                    var preferred = candidates
+                        .Where(candidate => string.Equals(
+                            candidate.Namespace ?? string.Empty,
+                            preferredNamespace ?? string.Empty,
+                            StringComparison.Ordinal))
+                        .ToList();
+                    if (preferred.Count == 1)
+                    {
+                        return preferred[0];
+                    }
+                }
+
                 var examples = string.Join(", ", candidates.Take(6).Select(GetCanonicalRuntimeName));
                 throw new InvalidOperationException(
                     $"GC protobuf type '{typeName}' is ambiguous for app {appId}; use a canonical runtime name. Candidates: {examples}");

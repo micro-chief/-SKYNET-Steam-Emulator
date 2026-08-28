@@ -866,7 +866,10 @@ namespace SKYNET.Steamworks.Implementation
 
             if (url.IndexOf("events/ajaxgetpartnereventspageable", StringComparison.OrdinalIgnoreCase) >= 0)
             {
-                return "{\"success\":1,\"events\":[],\"results_html\":\"\",\"last_time\":0,\"more_events\":false,\"total_count\":0}";
+                // SKYNET_DEADLOCK_NEWS_EMPTY_SUCCESS_CRASH_GUARD_V1
+                // An empty successful feed makes the current Deadlock client
+                // insert a null CitadelNewsEntryID_t and crash in client.dll.
+                return "{\"success\":0,\"skynet_test\":12345}";
             }
 
             if (url.IndexOf("proregistration/getdpcdata", StringComparison.OrdinalIgnoreCase) >= 0)

@@ -2108,6 +2108,140 @@ public sealed class DeadlockDB : ScriptDatabase
             );
             """
         );
+
+        // SKYNET_DEADLOCK_SEARCHABLE_MATCH_ID_V28_DB
+        // The client hideout search field accepts at most ten decimal digits.
+        // Keep allocation state separate from Matches so merely reserving an
+        // ID never creates a fake match-history row.
+        Execute(
+            connection,
+            """
+            CREATE TABLE IF NOT EXISTS RuntimeCounters (
+                Name TEXT PRIMARY KEY,
+                Value INTEGER NOT NULL
+            );
+            """
+        );
+    }
+
+    private readonly object _matchIdAllocatorSync =
+        new();
+
+    internal ulong AllocateMatchId()
+    {
+        const long minimumMatchId =
+            6_000_000_000L;
+
+        const long maximumMatchId =
+            9_999_999_999L;
+
+        // This reproduces the useful ten-digit prefix of the old V2.6
+        // millisecond ID (for example 6017876747), while the database counter
+        // guarantees uniqueness across rapid allocations and process restarts.
+        var timeFloor =
+            minimumMatchId +
+            DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() /
+                100_000L;
+
+        lock (_matchIdAllocatorSync)
+        {
+            using var connection =
+                OpenConnection();
+
+            using var transaction =
+                connection.BeginTransaction();
+
+            using (
+                var initialize =
+                    connection.CreateCommand()
+            )
+            {
+                initialize.Transaction =
+                    transaction;
+
+                initialize.CommandText =
+                    """
+                    INSERT OR IGNORE INTO RuntimeCounters (Name, Value)
+                    VALUES ('DeadlockMatchId', $initialValue);
+                    """;
+
+                initialize.Parameters.AddWithValue(
+                    "$initialValue",
+                    timeFloor - 1L
+                );
+
+                initialize.ExecuteNonQuery();
+            }
+
+            long currentValue;
+
+            using (
+                var read =
+                    connection.CreateCommand()
+            )
+            {
+                read.Transaction =
+                    transaction;
+
+                read.CommandText =
+                    """
+                    SELECT Value
+                    FROM RuntimeCounters
+                    WHERE Name = 'DeadlockMatchId';
+                    """;
+
+                currentValue =
+                    Convert.ToInt64(
+                        read.ExecuteScalar(),
+                        System.Globalization.CultureInfo.InvariantCulture
+                    );
+            }
+
+            var nextValue =
+                Math.Max(
+                    currentValue + 1L,
+                    timeFloor
+                );
+
+            if (
+                nextValue >
+                maximumMatchId
+            )
+            {
+                throw new InvalidOperationException(
+                    "Deadlock ten-digit Match ID namespace is exhausted"
+                );
+            }
+
+            using (
+                var update =
+                    connection.CreateCommand()
+            )
+            {
+                update.Transaction =
+                    transaction;
+
+                update.CommandText =
+                    """
+                    UPDATE RuntimeCounters
+                    SET Value = $value
+                    WHERE Name = 'DeadlockMatchId';
+                    """;
+
+                update.Parameters.AddWithValue(
+                    "$value",
+                    nextValue
+                );
+
+                update.ExecuteNonQuery();
+            }
+
+            transaction.Commit();
+
+            return unchecked(
+                (ulong)nextValue
+            );
+        }
     }
 
     internal void EnsurePlayer(

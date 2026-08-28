@@ -3,6 +3,10 @@ import {
 } from "../framework/gc";
 
 import {
+    setCurrentDeadlockPartyState
+} from "./RequestDeadlockPartyCreate";
+
+import {
     CMsgClientToGCPartySetMode,
     CMsgClientToGCPartySetModeResponse,
     CMsgClientToGCPartySetModeResponseEResponse,
@@ -254,6 +258,13 @@ export function requestDeadlockPartySetMode(
         hideout_search_key:
             ""
     };
+
+    // SKYNET_DEADLOCK_SCORED_HARD_BOTS_V27_PARTY_MODE
+    // 9010 consumes this same authoritative Party snapshot. Private PartyCreate
+    // may replace it later with its richer custom-lobby state.
+    setCurrentDeadlockPartyState(
+        party
+    );
 
     const partyBytes =
         encodeProto(

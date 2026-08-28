@@ -1,4 +1,17 @@
-import { HandlerContext } from "../framework/gc";
+import {
+    isDeadlockGameServerHelloDuplicate,
+    markDeadlockGameServerWelcomed,
+    getDeadlockWelcomedGameServerSteamId
+} from "./DeadlockGameServerHelloState";
+
+import {
+    HandlerContext,
+    encodeProto
+} from "../framework/gc";
+
+import {
+    getCurrentDeadlockPartyState
+} from "./RequestDeadlockPartyCreate";
 
 import {
     CMsgClientHello,
@@ -14,6 +27,9 @@ const requestProto = {
 const responseProto = {
     name: "CMsgClientWelcome",
 } as ProtoDescriptor<CMsgClientWelcome>;
+
+const GS_ALLOCATE_FOR_MATCH =
+    10021;
 
 export const RequestGameServerHelloRoute = {
     requestId: 4007,
@@ -31,9 +47,63 @@ export function requestGameServerHello(
         CMsgClientWelcome
     >,
 ): boolean {
+    // SKYNET_DEADLOCK_GS_HELLO_DUPLICATE_GUARD_V1
+    if (
+        isDeadlockGameServerHelloDuplicate(
+            ctx.steamId
+        )
+    ) {
+        log(
+            "[4007-GS] ========================================"
+        );
+
+        log(
+            "[4007-GS] duplicate hello / keepalive steamId=" +
+            ctx.steamId
+        );
+
+        log(
+            "[4007-GS] already welcomed steamId=" +
+            getDeadlockWelcomedGameServerSteamId()
+        );
+
+        log(
+            "[4007-GS] 4005 suppressed"
+        );
+
+        return true;
+    }
+
+    log(
+        "[4007-GS] ========================================"
+    );
+
+    log(
+        "[4007-GS] GameServerHello steamId=" +
+        ctx.steamId
+    );
+
     ctx.reply({
-        version: ctx.request.version ?? 1,
+        version:
+            ctx.request.version ?? 1,
     });
+
+    log(
+        "[4007-GS] queued 4005 GameServerWelcome"
+    );
+
+    markDeadlockGameServerWelcomed(
+        ctx.steamId
+    );
+
+    log(
+        "[4007-GS] remembered welcomed steamId=" +
+        ctx.steamId
+    );
+
+    log(
+        "[4007-GS] waiting for 10023 EnterMatchmaking"
+    );
 
     return true;
 }

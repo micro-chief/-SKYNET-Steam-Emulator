@@ -231,6 +231,33 @@ public sealed class GameCoordinatorScriptPlugin : IGameCoordinatorPlugin, IGameC
     {
         foreach (var serviceName in app.HostServices)
         {
+            if (string.Equals(serviceName, Cs2GcRuntimeServices.HostServiceName, StringComparison.OrdinalIgnoreCase))
+            {
+                if (app.AppId != Cs2GcRuntimeServices.AppId)
+                {
+                    throw new InvalidOperationException(
+                        $"GC app {app.AppId} is not authorized for host service '{serviceName}' in {app.ManifestPath}");
+                }
+
+                builder
+                    .RegisterHostFunction("gc", "cs2LanReservation", dispatcher.Cs2LanReservation)
+                    .RegisterHostFunction("gc", "cs2Equipment", dispatcher.Cs2Equipment)
+                    .RegisterHostFunction("gc", "cs2EquipItem", dispatcher.Cs2EquipItem)
+                    .RegisterHostFunction("gc", "cs2SetItemPosition", dispatcher.Cs2SetItemPosition)
+                    .RegisterHostFunction("gc", "cs2SetItemAttribute", dispatcher.Cs2SetItemAttribute)
+                    .RegisterHostFunction("gc", "cs2SetItemFloatAttribute", dispatcher.Cs2SetItemFloatAttribute)
+                    .RegisterHostFunction("gc", "cs2CreateRandomInventoryItem", dispatcher.Cs2CreateRandomInventoryItem)
+                    .RegisterHostFunction("gc", "cs2ActivateLanReservation", dispatcher.Cs2ActivateLanReservation)
+                    .RegisterHostFunction("gc", "cs2OngoingReservation", dispatcher.Cs2OngoingReservation)
+                    .RegisterHostFunction("gc", "cs2ConfirmReservation", dispatcher.Cs2ConfirmReservation)
+                    .RegisterHostFunction("gc", "cs2ClearReservation", dispatcher.Cs2ClearReservation)
+                    .RegisterHostFunction("gc", "cs2FinishReservation", dispatcher.Cs2FinishReservation)
+                    .RegisterHostFunction("gc", "cs2QueueClientMessage", dispatcher.Cs2QueueClientMessage)
+                    .RegisterHostFunction("gc", "cs2QueueGameServerMessage", dispatcher.Cs2QueueGameServerMessage)
+                    .RegisterHostFunction("gc", "cs2RegisterGameServer", dispatcher.Cs2RegisterGameServer);
+                continue;
+            }
+
             if (string.Equals(serviceName, DotaGcRuntimeServices.HostServiceName, StringComparison.OrdinalIgnoreCase))
             {
                 if (app.AppId != DotaGcRuntimeServices.AppId)
@@ -309,9 +336,131 @@ throw new InvalidOperationException(
                         .DeadlockMatchHistory(
                             args
                         )
+            )
+// SKYNET_DEADLOCK_DEDICATED_HOST_REGISTER_V1
+            // SKYNET_DEADLOCK_EPHEMERAL_MATCH_LOBBY_V1_HOST
+            .RegisterHostFunction(
+                "gc",
+                "deadlockAllocateEphemeralMatchLobbyId",
+                args =>
+                    dispatcher
+                        .RequireCurrent()
+                        .DeadlockAllocateEphemeralMatchLobbyId(
+                            args
+                        )
+            )
+            // SKYNET_DEADLOCK_SEPARATE_MATCH_ID_V26_HOST
+            .RegisterHostFunction(
+                "gc",
+                "deadlockAllocateEphemeralMatchId",
+                args =>
+                    dispatcher
+                        .RequireCurrent()
+                        .DeadlockAllocateEphemeralMatchId(
+                            args
+                        )
+            )
+            .RegisterHostFunction(
+                "gc",
+                "deadlockStartDedicatedServer",
+                dispatcher.DeadlockStartDedicatedServer
+            )
+            .RegisterHostFunction(
+                "gc",
+                "deadlockDedicatedServerState",
+                dispatcher.DeadlockDedicatedServerState
+            )
+            // SKYNET_DEADLOCK_PER_CLIENT_CONNECT_IP_V29_HOST_REGISTER
+            .RegisterHostFunction(
+                "gc",
+                "deadlockResolveClientConnectIp",
+                dispatcher.DeadlockResolveClientConnectIp
+            )
+            .RegisterHostFunction(
+                "gc",
+                "deadlockReleaseDedicatedServer",
+                dispatcher.DeadlockReleaseDedicatedServer
+            )
+            // SKYNET_DEADLOCK_REAL_10014_DECODER_V2_REGISTER
+            .RegisterHostFunction(
+                "gc",
+                "deadlockInspectCurrentMatchSignoutV2",
+                _ =>
+                    dispatcher
+                        .RequireCurrent()
+                        .DeadlockInspectCurrentMatchSignoutV2()
+            )
+            // SKYNET_DEADLOCK_POSTMATCH_ANALYTICS_EPHEMERAL_V1_HOST_REGISTER
+            .RegisterHostFunction(
+                "gc",
+                "deadlockQueueCurrentPostMatchAnalytics",
+                _ =>
+                    dispatcher
+                        .RequireCurrent()
+                        .DeadlockQueueCurrentPostMatchAnalytics()
+            )
+
+            // SKYNET_DEADLOCK_REAL_10014_DECODER_V1_REGISTER
+            .RegisterHostFunction(
+                "gc",
+                "deadlockInspectCurrentMatchSignout",
+                _ =>
+                    dispatcher
+                        .RequireCurrent()
+                        .DeadlockInspectCurrentMatchSignout()
+            )
+
+            // SKYNET_DEADLOCK_POST_SIGNOUT_DELAYED_RELEASE_V1_REGISTER
+            .RegisterHostFunction(
+                "gc",
+                "deadlockScheduleCurrentMatchSignoutRelease",
+                args =>
+                    dispatcher
+                        .RequireCurrent()
+                        .DeadlockScheduleCurrentMatchSignoutRelease(
+                            args
+                        )
+            )
+            // SKYNET_DEADLOCK_LEAVE_LOBBY_9015_REQUEST_ID_V2_REGISTER
+            .RegisterHostFunction(
+                "gc",
+                "deadlockCurrentLeaveLobbyId",
+                _ =>
+                    dispatcher
+                        .RequireCurrent()
+                        .DeadlockCurrentLeaveLobbyId()
+            )
+            // SKYNET_DEADLOCK_CLIENT_ASSIGN_HOST_V111
+            .RegisterHostFunction(
+                "gc",
+                "deadlockQueueGcMessageForAccount",
+                args =>
+                    dispatcher
+                        .RequireCurrent()
+                        .DeadlockQueueGcMessageForAccount(
+                            args
+                        )
             );
 
-    }
+        // SKYNET_DEADLOCK_DEDICATED_STEAMID_GUARD_V1_REGISTER
+        // SKYNET_DEADLOCK_10025_HOST_REGISTER_V1
+        builder.RegisterHostFunction(
+            "gc",
+            "deadlockUpdateCurrentLobbyServerState",
+            _ =>
+                dispatcher
+                    .RequireCurrent()
+                    .DeadlockUpdateCurrentLobbyServerState()
+        );
+
+        builder.RegisterHostFunction(
+            "gc",
+            "deadlockIsDedicatedGameServer",
+            args =>
+                dispatcher
+                    .RequireCurrent()
+                    .DeadlockIsDedicatedGameServer(args));
+}
 
     private static void RegisterDotaHostFunctions(TypeSharpRuntimeBuilder builder, ScriptHostDispatcher dispatcher)
     {
@@ -516,6 +665,81 @@ internal sealed class ScriptHostDispatcher
         return RequireCurrent().Reply(args);
     }
 
+    public TsValue? Cs2LanReservation(TsValue[] args)
+    {
+        return RequireCurrent().Cs2LanReservation(args);
+    }
+
+    public TsValue? Cs2Equipment(TsValue[] args)
+    {
+        return RequireCurrent().Cs2Equipment(args);
+    }
+
+    public TsValue? Cs2EquipItem(TsValue[] args)
+    {
+        return RequireCurrent().Cs2EquipItem(args);
+    }
+
+    public TsValue? Cs2SetItemPosition(TsValue[] args)
+    {
+        return RequireCurrent().Cs2SetItemPosition(args);
+    }
+
+    public TsValue? Cs2SetItemAttribute(TsValue[] args)
+    {
+        return RequireCurrent().Cs2SetItemAttribute(args);
+    }
+
+    public TsValue? Cs2SetItemFloatAttribute(TsValue[] args)
+    {
+        return RequireCurrent().Cs2SetItemFloatAttribute(args);
+    }
+
+    public TsValue? Cs2CreateRandomInventoryItem(TsValue[] args)
+    {
+        return RequireCurrent().Cs2CreateRandomInventoryItem(args);
+    }
+
+    public TsValue? Cs2ActivateLanReservation(TsValue[] args)
+    {
+        return RequireCurrent().Cs2ActivateLanReservation(args);
+    }
+
+    public TsValue? Cs2OngoingReservation(TsValue[] args)
+    {
+        return RequireCurrent().Cs2OngoingReservation(args);
+    }
+
+    public TsValue? Cs2ConfirmReservation(TsValue[] args)
+    {
+        return RequireCurrent().Cs2ConfirmReservation(args);
+    }
+
+    public TsValue? Cs2ClearReservation(TsValue[] args)
+    {
+        return RequireCurrent().Cs2ClearReservation(args);
+    }
+
+    public TsValue? Cs2FinishReservation(TsValue[] args)
+    {
+        return RequireCurrent().Cs2FinishReservation(args);
+    }
+
+    public TsValue? Cs2QueueClientMessage(TsValue[] args)
+    {
+        return RequireCurrent().Cs2QueueClientMessage(args);
+    }
+
+    public TsValue? Cs2QueueGameServerMessage(TsValue[] args)
+    {
+        return RequireCurrent().Cs2QueueGameServerMessage(args);
+    }
+
+    public TsValue? Cs2RegisterGameServer(TsValue[] args)
+    {
+        return RequireCurrent().Cs2RegisterGameServer(args);
+    }
+
     public TsValue? DotaEquipItem(TsValue[] args)
     {
         return RequireCurrent().DotaEquipItem(args);
@@ -567,6 +791,44 @@ internal sealed class ScriptHostDispatcher
     {
         return RequireCurrent()
             .DeadlockHeroStats(
+                args
+            );
+    }
+
+    // SKYNET_DEADLOCK_DEDICATED_HOST_DISPATCHER_V1
+
+    public TsValue? DeadlockStartDedicatedServer(
+        TsValue[] args)
+    {
+        return RequireCurrent()
+            .DeadlockStartDedicatedServer(
+                args
+            );
+    }
+
+    public TsValue? DeadlockDedicatedServerState(
+        TsValue[] args)
+    {
+        return RequireCurrent()
+            .DeadlockDedicatedServerState(
+                args
+            );
+    }
+
+    public TsValue? DeadlockResolveClientConnectIp(
+        TsValue[] args)
+    {
+        return RequireCurrent()
+            .DeadlockResolveClientConnectIp(
+                args
+            );
+    }
+
+    public TsValue? DeadlockReleaseDedicatedServer(
+        TsValue[] args)
+    {
+        return RequireCurrent()
+            .DeadlockReleaseDedicatedServer(
                 args
             );
     }
@@ -1075,6 +1337,23 @@ internal sealed class ScriptExchangeHost
     private readonly GameCoordinatorProtoCodec _codec;
     private readonly ILogger _logger;
 
+    // SKYNET_DEADLOCK_POSTMATCH_ANALYTICS_EPHEMERAL_V1_HOST_MODEL
+    // One-request lifetime; never persisted.
+    private DeadlockPostMatchResult? _deadlockPostMatchResult;
+
+    private sealed record DeadlockPostMatchPlayer(
+        uint AccountId,
+        uint HeroId,
+        uint Outcome
+    );
+
+    private sealed record DeadlockPostMatchResult(
+        ulong LobbyId,
+        ulong MatchId,
+        uint MatchMode,
+        IReadOnlyList<DeadlockPostMatchPlayer> Players
+    );
+
     public ScriptExchangeHost(
         GameCoordinatorContext context,
         ApiGCExchangeRequest request,
@@ -1107,6 +1386,441 @@ internal sealed class ScriptExchangeHost
     public TsValue PersonaName() => TsValue.FromString(_context.PersonaName);
 
     public TsValue Now() => TsValue.FromInt64(DateTimeOffset.UtcNow.ToUnixTimeSeconds());
+
+    public TsValue Cs2LanReservation(TsValue[] args)
+    {
+        var gameType = args.Length > 0
+            ? CheckedToUInt32(ToNumber(args[0], "cs2LanReservation.gameType"), "cs2LanReservation.gameType")
+            : 0;
+        var clientVersion = args.Length > 1
+            ? CheckedToUInt32(ToNumber(args[1], "cs2LanReservation.clientVersion"), "cs2LanReservation.clientVersion")
+            : 0;
+        var reservation = Cs2GcRuntimeServices.CreateLanReservation(gameType, clientVersion);
+        if (reservation == null)
+        {
+            return TsValue.Null;
+        }
+
+        var value = new TsObject("Cs2LanReservation");
+        value.SetField("serverId", TsValue.FromUInt64(reservation.ServerId));
+        value.SetField("matchId", TsValue.FromUInt64(reservation.MatchId));
+        value.SetField("reservationId", TsValue.FromUInt64(reservation.ReservationId));
+        value.SetField("directUdpIp", ToTsUInt32(reservation.DirectUdpIp));
+        value.SetField("directUdpPort", ToTsUInt32(reservation.DirectUdpPort));
+        value.SetField("serverAddress", TsValue.FromString(reservation.ServerAddress));
+        value.SetField("map", TsValue.FromString(reservation.Map));
+        return new TsObjectValue(value);
+    }
+
+    public TsValue Cs2Equipment(TsValue[] args)
+    {
+        var steamId = args.Length > 0
+            ? Convert.ToUInt64(ToInteger(args[0], "cs2Equipment.steamId").ToString())
+            : _context.SteamId;
+        if (steamId == 0)
+        {
+            steamId = _context.SteamId;
+        }
+
+        var snapshot = Cs2GcRuntimeServices.GetEquipment(steamId);
+        var catalog = Cs2GcRuntimeServices.ItemCatalog;
+        var result = new TsObject("Cs2EquipmentSnapshot");
+        result.SetField("version", TsValue.FromUInt64(Math.Max(snapshot.Version, catalog.Version)));
+
+        var items = new TsArray();
+        foreach (var item in catalog.Items)
+        {
+            var value = new TsObject("Cs2InventoryCatalogItem");
+            value.SetField("defIndex", ToTsUInt32(item.DefIndex));
+            value.SetField("customName", TsValue.FromString(string.Empty));
+            value.SetField("paintKitBits", ToTsUInt32(item.PaintKitBits));
+            value.SetField("paintSeedBits", ToTsUInt32(item.PaintSeedBits));
+            value.SetField("paintWearBits", ToTsUInt32(item.PaintWearBits));
+            value.SetField("quality", ToTsUInt32(item.Quality));
+            value.SetField("rarity", ToTsUInt32(item.Rarity));
+            value.SetField("category", TsValue.FromString(item.Category));
+            var attributes = new TsArray();
+            foreach (var attribute in item.Attributes)
+            {
+                var attributeValue = new TsObject("Cs2InventoryCatalogAttribute");
+                attributeValue.SetField("defIndex", ToTsUInt32(attribute.DefIndex));
+                attributeValue.SetField("valueBits", ToTsUInt32(attribute.ValueBits));
+                attributes.Add(new TsObjectValue(attributeValue));
+            }
+
+            value.SetField("attributes", new TsArrayValue(attributes));
+            items.Add(new TsObjectValue(value));
+        }
+
+        result.SetField("items", new TsArrayValue(items));
+
+        var bindings = new TsArray();
+        foreach (var binding in snapshot.Bindings)
+        {
+            var value = new TsObject("Cs2EquipmentBinding");
+            value.SetField("classId", ToTsUInt32(binding.ClassId));
+            value.SetField("slotId", ToTsUInt32(binding.SlotId));
+            value.SetField("itemId", TsValue.FromUInt64(binding.ItemId));
+            bindings.Add(new TsObjectValue(value));
+        }
+
+        result.SetField("bindings", new TsArrayValue(bindings));
+
+        var positions = new TsArray();
+        foreach (var position in snapshot.Positions)
+        {
+            var value = new TsObject("Cs2InventoryPosition");
+            value.SetField("itemId", TsValue.FromUInt64(position.ItemId));
+            value.SetField("position", ToTsUInt32(position.Position));
+            positions.Add(new TsObjectValue(value));
+        }
+
+        result.SetField("positions", new TsArrayValue(positions));
+
+        var itemAttributes = new TsArray();
+        foreach (var attribute in snapshot.ItemAttributes)
+        {
+            var value = new TsObject("Cs2ItemAttributeOverride");
+            value.SetField("itemId", TsValue.FromUInt64(attribute.ItemId));
+            value.SetField("defIndex", ToTsUInt32(attribute.DefIndex));
+            value.SetField("valueBits", ToTsUInt32(attribute.ValueBits));
+            itemAttributes.Add(new TsObjectValue(value));
+        }
+
+        result.SetField("itemAttributes", new TsArrayValue(itemAttributes));
+
+        var instances = new TsArray();
+        foreach (var instance in snapshot.Instances)
+        {
+            var value = new TsObject("Cs2InventoryInstance");
+            value.SetField("itemId", TsValue.FromUInt64(instance.ItemId));
+            value.SetField("templateIndex", TsValue.FromInt32(instance.TemplateIndex));
+            value.SetField("position", ToTsUInt32(instance.Position));
+            instances.Add(new TsObjectValue(value));
+        }
+
+        result.SetField("instances", new TsArrayValue(instances));
+        return new TsObjectValue(result);
+    }
+
+    public TsValue Cs2EquipItem(TsValue[] args)
+    {
+        if (args.Length < 4)
+        {
+            throw new InvalidOperationException("cs2EquipItem(steamId, classId, slotId, itemId) requires four arguments");
+        }
+
+        var steamId = Convert.ToUInt64(ToInteger(args[0], "cs2EquipItem.steamId").ToString());
+        var classId = CheckedToUInt32(ToNumber(args[1], "cs2EquipItem.classId"), "cs2EquipItem.classId");
+        var slotId = CheckedToUInt32(ToNumber(args[2], "cs2EquipItem.slotId"), "cs2EquipItem.slotId");
+        var itemId = Convert.ToUInt64(ToInteger(args[3], "cs2EquipItem.itemId").ToString());
+        if (steamId == 0)
+        {
+            steamId = _context.SteamId;
+        }
+
+        return TsValue.FromUInt64(Cs2GcRuntimeServices.SetEquipment(steamId, classId, slotId, itemId));
+    }
+
+    public TsValue Cs2SetItemPosition(TsValue[] args)
+    {
+        if (args.Length < 3)
+        {
+            throw new InvalidOperationException("cs2SetItemPosition(steamId, itemId, position) requires three arguments");
+        }
+
+        var steamId = Convert.ToUInt64(ToInteger(args[0], "cs2SetItemPosition.steamId").ToString());
+        var itemId = Convert.ToUInt64(ToInteger(args[1], "cs2SetItemPosition.itemId").ToString());
+        var position = CheckedToUInt32(ToNumber(args[2], "cs2SetItemPosition.position"), "cs2SetItemPosition.position");
+        if (steamId == 0)
+        {
+            steamId = _context.SteamId;
+        }
+
+        return TsValue.FromUInt64(Cs2GcRuntimeServices.SetItemPosition(steamId, itemId, position));
+    }
+
+    public TsValue Cs2SetItemAttribute(TsValue[] args)
+    {
+        if (args.Length < 4)
+        {
+            throw new InvalidOperationException(
+                "cs2SetItemAttribute(steamId, itemId, defIndex, valueBits) requires four arguments");
+        }
+
+        var steamId = Convert.ToUInt64(ToInteger(args[0], "cs2SetItemAttribute.steamId").ToString());
+        var itemId = Convert.ToUInt64(ToInteger(args[1], "cs2SetItemAttribute.itemId").ToString());
+        var defIndex = CheckedToUInt32(ToNumber(args[2], "cs2SetItemAttribute.defIndex"), "cs2SetItemAttribute.defIndex");
+        var valueBits = CheckedToUInt32(ToNumber(args[3], "cs2SetItemAttribute.valueBits"), "cs2SetItemAttribute.valueBits");
+        if (steamId == 0)
+        {
+            steamId = _context.SteamId;
+        }
+
+        return TsValue.FromUInt64(Cs2GcRuntimeServices.SetItemAttribute(steamId, itemId, defIndex, valueBits));
+    }
+
+    public TsValue Cs2SetItemFloatAttribute(TsValue[] args)
+    {
+        if (args.Length < 4)
+        {
+            throw new InvalidOperationException(
+                "cs2SetItemFloatAttribute(steamId, itemId, defIndex, value) requires four arguments");
+        }
+
+        var steamId = Convert.ToUInt64(ToInteger(args[0], "cs2SetItemFloatAttribute.steamId").ToString());
+        var itemId = Convert.ToUInt64(ToInteger(args[1], "cs2SetItemFloatAttribute.itemId").ToString());
+        var defIndex = CheckedToUInt32(
+            ToNumber(args[2], "cs2SetItemFloatAttribute.defIndex"),
+            "cs2SetItemFloatAttribute.defIndex");
+        var value = checked((float)ToNumber(args[3], "cs2SetItemFloatAttribute.value"));
+        if (steamId == 0)
+        {
+            steamId = _context.SteamId;
+        }
+
+        return TsValue.FromUInt64(Cs2GcRuntimeServices.SetItemFloatAttribute(steamId, itemId, defIndex, value));
+    }
+
+    public TsValue Cs2CreateRandomInventoryItem(TsValue[] args)
+    {
+        if (args.Length < 2)
+        {
+            throw new InvalidOperationException(
+                "cs2CreateRandomInventoryItem(steamId, category) requires two arguments");
+        }
+
+        var steamId = Convert.ToUInt64(ToInteger(args[0], "cs2CreateRandomInventoryItem.steamId").ToString());
+        if (steamId == 0)
+        {
+            steamId = _context.SteamId;
+        }
+
+        var category = ToString(args[1]);
+        return TsValue.FromUInt64(Cs2GcRuntimeServices.CreateRandomInventoryItem(steamId, category));
+    }
+
+    public TsValue Cs2RegisterGameServer(TsValue[] args)
+    {
+        var version = args.Length > 0
+            ? CheckedToUInt32(ToNumber(args[0], "cs2RegisterGameServer.version"), "cs2RegisterGameServer.version")
+            : 0;
+        var registration = Cs2GcRuntimeServices.RegisterGameServer(
+            _context.SteamId,
+            _context.SessionSteamId,
+            version,
+            _context.ClientIp);
+        var value = new TsObject("Cs2GameServerRegistration");
+        value.SetField("serverId", TsValue.FromUInt64(registration.ServerId));
+        value.SetField("sessionSteamId", TsValue.FromUInt64(registration.SessionSteamId));
+        value.SetField("serverAddress", TsValue.FromString(registration.ServerAddress));
+        value.SetField("port", ToTsUInt32(registration.Port));
+        value.SetField("version", ToTsUInt32(registration.Version));
+        value.SetField("registeredAt", ToTsUInt32(registration.RegisteredAt));
+        return new TsObjectValue(value);
+    }
+
+    public TsValue Cs2ActivateLanReservation(TsValue[] args)
+    {
+        if (args.Length < 4)
+        {
+            throw new InvalidOperationException(
+                "cs2ActivateLanReservation(reservation, gameType, serverVersion, accountIds) requires four arguments");
+        }
+
+        var source = RequireObject(args[0], "cs2ActivateLanReservation.reservation");
+        if (args[3] is not TsArrayValue accountValues)
+        {
+            throw new InvalidOperationException("cs2ActivateLanReservation.accountIds: expected array");
+        }
+
+        var accountIds = new List<uint>();
+        for (var i = 0; i < accountValues.Value.Count; i++)
+        {
+            accountIds.Add(CheckedToUInt32(
+                ToNumber(accountValues.Value.Get(i), $"cs2ActivateLanReservation.accountIds[{i}]"),
+                $"cs2ActivateLanReservation.accountIds[{i}]"));
+        }
+
+        var reservation = new Cs2LanReservation(
+            U64Field(source, "serverId", "cs2ActivateLanReservation.reservation"),
+            U64Field(source, "matchId", "cs2ActivateLanReservation.reservation"),
+            U64Field(source, "reservationId", "cs2ActivateLanReservation.reservation"),
+            U32Field(source, "directUdpIp", "cs2ActivateLanReservation.reservation"),
+            U32Field(source, "directUdpPort", "cs2ActivateLanReservation.reservation"),
+            StringField(source, "serverAddress", "cs2ActivateLanReservation.reservation"),
+            StringField(source, "map", "cs2ActivateLanReservation.reservation"));
+        var gameType = CheckedToUInt32(
+            ToNumber(args[1], "cs2ActivateLanReservation.gameType"),
+            "cs2ActivateLanReservation.gameType");
+        var serverVersion = CheckedToUInt32(
+            ToNumber(args[2], "cs2ActivateLanReservation.serverVersion"),
+            "cs2ActivateLanReservation.serverVersion");
+        return TsValue.FromBool(Cs2GcRuntimeServices.ActivateLanReservation(
+            reservation,
+            gameType,
+            serverVersion,
+            accountIds,
+            _context.AccountId,
+            _context.SteamId));
+    }
+
+    public TsValue Cs2OngoingReservation(TsValue[] args)
+    {
+        var accountId = args.Length > 0
+            ? CheckedToUInt32(ToNumber(args[0], "cs2OngoingReservation.accountId"), "cs2OngoingReservation.accountId")
+            : _context.AccountId;
+        if (accountId == 0)
+        {
+            accountId = _context.AccountId;
+        }
+
+        var sessionSteamId = accountId == _context.AccountId ? _context.SteamId : 0;
+        var reservation = Cs2GcRuntimeServices.GetOngoingReservation(accountId, sessionSteamId);
+        if (reservation == null)
+        {
+            return TsValue.Null;
+        }
+
+        var value = new TsObject("Cs2ActiveReservation");
+        value.SetField("serverId", TsValue.FromUInt64(reservation.ServerId));
+        value.SetField("matchId", TsValue.FromUInt64(reservation.MatchId));
+        value.SetField("reservationId", TsValue.FromUInt64(reservation.ReservationId));
+        value.SetField("gameType", ToTsUInt32(reservation.GameType));
+        value.SetField("serverVersion", ToTsUInt32(reservation.ServerVersion));
+        value.SetField("directUdpIp", ToTsUInt32(reservation.DirectUdpIp));
+        value.SetField("directUdpPort", ToTsUInt32(reservation.DirectUdpPort));
+        value.SetField("serverAddress", TsValue.FromString(reservation.ServerAddress));
+        value.SetField("map", TsValue.FromString(reservation.Map));
+        value.SetField("state", ToTsUInt32((uint)reservation.State));
+        var players = new TsArray();
+        foreach (var playerAccountId in reservation.AccountIds)
+        {
+            players.Add(ToTsUInt32(playerAccountId));
+        }
+
+        value.SetField("accountIds", new TsArrayValue(players));
+        return new TsObjectValue(value);
+    }
+
+    public TsValue Cs2ConfirmReservation(TsValue[] args)
+    {
+        if (args.Length < 1)
+        {
+            throw new InvalidOperationException("cs2ConfirmReservation(reservationId) requires one argument");
+        }
+
+        var reservationId = Convert.ToUInt64(ToInteger(args[0], "cs2ConfirmReservation.reservationId").ToString());
+        return TsValue.FromBool(Cs2GcRuntimeServices.ConfirmReservation(reservationId, _context.SteamId));
+    }
+
+    public TsValue Cs2ClearReservation(TsValue[] args)
+    {
+        var accountId = args.Length > 0
+            ? CheckedToUInt32(ToNumber(args[0], "cs2ClearReservation.accountId"), "cs2ClearReservation.accountId")
+            : _context.AccountId;
+        if (accountId == 0)
+        {
+            accountId = _context.AccountId;
+        }
+
+        return TsValue.FromBool(Cs2GcRuntimeServices.ClearReservation(accountId));
+    }
+
+    public TsValue Cs2FinishReservation(TsValue[] args)
+    {
+        if (args.Length < 1)
+        {
+            throw new InvalidOperationException("cs2FinishReservation(reservationId) requires one argument");
+        }
+
+        var reservationId = Convert.ToUInt64(
+            ToInteger(args[0], "cs2FinishReservation.reservationId").ToString());
+        var finished = Cs2GcRuntimeServices.FinishReservation(reservationId, _context.SteamId);
+        if (finished == null)
+        {
+            return TsValue.Null;
+        }
+
+        var value = new TsObject("Cs2FinishedReservation");
+        value.SetField("reservationId", TsValue.FromUInt64(finished.ReservationId));
+        value.SetField("serverId", TsValue.FromUInt64(finished.ServerId));
+        value.SetField("matchId", TsValue.FromUInt64(finished.MatchId));
+        var players = new TsArray();
+        foreach (var player in finished.Players)
+        {
+            var playerValue = new TsObject("Cs2ReservationPlayer");
+            playerValue.SetField("accountId", ToTsUInt32(player.AccountId));
+            playerValue.SetField("steamId", TsValue.FromUInt64(player.SteamId));
+            players.Add(new TsObjectValue(playerValue));
+        }
+
+        value.SetField("players", new TsArrayValue(players));
+        return new TsObjectValue(value);
+    }
+
+    public TsValue Cs2QueueClientMessage(TsValue[] args)
+    {
+        if (args.Length < 3)
+        {
+            throw new InvalidOperationException(
+                "cs2QueueClientMessage(steamId, messageType, payload) requires three arguments");
+        }
+
+        var targetSteamId = Convert.ToUInt64(
+            ToInteger(args[0], "cs2QueueClientMessage.steamId").ToString());
+        if (targetSteamId == 0)
+        {
+            return TsValue.FromBool(false);
+        }
+
+        var messageType = CheckedToUInt32(
+            ToNumber(args[1], "cs2QueueClientMessage.messageType"),
+            "cs2QueueClientMessage.messageType");
+        var payload = ToBytes(args[2], "cs2QueueClientMessage.payload");
+        GameCoordinatorPendingMessages.Enqueue(
+            Cs2GcRuntimeServices.AppId,
+            targetSteamId,
+            new ApiGCMessage
+            {
+                AppId = Cs2GcRuntimeServices.AppId,
+                MessageType = messageType,
+                PayloadBase64 = Convert.ToBase64String(payload),
+                Protobuf = true
+            });
+        return TsValue.FromBool(true);
+    }
+
+    public TsValue Cs2QueueGameServerMessage(TsValue[] args)
+    {
+        if (args.Length < 2)
+        {
+            throw new InvalidOperationException(
+                "cs2QueueGameServerMessage(messageType, payload) requires two arguments");
+        }
+
+        var registration = Cs2GcRuntimeServices.RegisteredGameServer;
+        if (registration == null || registration.ServerId == 0)
+        {
+            return TsValue.FromBool(false);
+        }
+
+        var messageType = CheckedToUInt32(
+            ToNumber(args[0], "cs2QueueGameServerMessage.messageType"),
+            "cs2QueueGameServerMessage.messageType");
+        var payload = ToBytes(args[1], "cs2QueueGameServerMessage.payload");
+        GameCoordinatorPendingMessages.Enqueue(
+            Cs2GcRuntimeServices.AppId,
+            registration.ServerId,
+            new ApiGCMessage
+            {
+                AppId = Cs2GcRuntimeServices.AppId,
+                MessageType = messageType,
+                PayloadBase64 = Convert.ToBase64String(payload),
+                Protobuf = true
+            });
+        return TsValue.FromBool(true);
+    }
 
 
 
@@ -2654,6 +3368,6723 @@ internal sealed class ScriptExchangeHost
         return ToTsEquipmentList(changed);
     }
 
+    // SKYNET_DEADLOCK_DEDICATED_HOST_EXCHANGE_V1
+
+    // SKYNET_DEADLOCK_10025_HOST_V1
+    //
+    // Parse the current request directly in C# so lobby_id remains a
+    // lossless ulong. The TypeSharp side only receives lobbyId as string.
+    //
+    // CMsgServerToGCUpdateLobbyServerState:
+    //   1 -> uint64 lobby_id
+    //   2 -> ELobbyServerState server_state
+    //   3 -> bool safe_to_abandon
+    public TsValue DeadlockUpdateCurrentLobbyServerState()
+    {
+        if (
+            _request.MessageType !=
+            10025
+        )
+        {
+            return BuildDeadlock10025Result(
+                false,
+                0,
+                0,
+                false,
+                "wrong_message_type"
+            );
+        }
+
+        var validator =
+            DeadlockGcRuntimeServices
+                .DedicatedGameServerValidator;
+
+        if (
+            validator == null ||
+            !validator(
+                _context.SteamId
+            )
+        )
+        {
+            _logger.LogWarning(
+                "Rejected Deadlock 10025 from non-dedicated SteamID {SteamId}",
+                _context.SteamId
+            );
+
+            return BuildDeadlock10025Result(
+                false,
+                0,
+                0,
+                false,
+                "not_registered_dedicated"
+            );
+        }
+
+        byte[] payload;
+
+        try
+        {
+            payload =
+                Convert.FromBase64String(
+                    _request.BodyBase64 ??
+                    string.Empty
+                );
+        }
+        catch (
+            FormatException
+        )
+        {
+            _logger.LogWarning(
+                "Rejected Deadlock 10025 from {SteamId}: invalid BodyBase64",
+                _context.SteamId
+            );
+
+            return BuildDeadlock10025Result(
+                false,
+                0,
+                0,
+                false,
+                "invalid_base64"
+            );
+        }
+
+        var offset =
+            0;
+
+        ulong lobbyId =
+            0;
+
+        uint serverState =
+            0;
+
+        var safeToAbandon =
+            false;
+
+        var hasLobbyId =
+            false;
+
+        while (
+            offset <
+            payload.Length
+        )
+        {
+            if (
+                !TryReadDeadlock10025VarUInt64(
+                    payload,
+                    ref offset,
+                    out var key
+                )
+            )
+            {
+                return BuildDeadlock10025Result(
+                    false,
+                    lobbyId,
+                    0,
+                    safeToAbandon,
+                    "malformed_key"
+                );
+            }
+
+            var fieldNumber =
+                unchecked(
+                    (int)(
+                        key >>
+                        3
+                    )
+                );
+
+            var wireType =
+                unchecked(
+                    (int)(
+                        key &
+                        7
+                    )
+                );
+
+            if (
+                fieldNumber <=
+                0
+            )
+            {
+                return BuildDeadlock10025Result(
+                    false,
+                    lobbyId,
+                    0,
+                    safeToAbandon,
+                    "invalid_field_number"
+                );
+            }
+
+            if (
+                fieldNumber ==
+                    1 ||
+                fieldNumber ==
+                    2 ||
+                fieldNumber ==
+                    3
+            )
+            {
+                if (
+                    wireType !=
+                    0
+                )
+                {
+                    return BuildDeadlock10025Result(
+                        false,
+                        lobbyId,
+                        0,
+                        safeToAbandon,
+                        "invalid_known_field_wire_type"
+                    );
+                }
+
+                if (
+                    !TryReadDeadlock10025VarUInt64(
+                        payload,
+                        ref offset,
+                        out var rawValue
+                    )
+                )
+                {
+                    return BuildDeadlock10025Result(
+                        false,
+                        lobbyId,
+                        0,
+                        safeToAbandon,
+                        "malformed_known_field"
+                    );
+                }
+
+                if (
+                    fieldNumber ==
+                    1
+                )
+                {
+                    lobbyId =
+                        rawValue;
+
+                    hasLobbyId =
+                        true;
+
+                    continue;
+                }
+
+                if (
+                    fieldNumber ==
+                    2
+                )
+                {
+                    if (
+                        rawValue >
+                        uint.MaxValue
+                    )
+                    {
+                        return BuildDeadlock10025Result(
+                            false,
+                            lobbyId,
+                            0,
+                            safeToAbandon,
+                            "server_state_overflow"
+                        );
+                    }
+
+                    serverState =
+                        unchecked(
+                            (uint)rawValue
+                        );
+
+                    continue;
+                }
+
+                safeToAbandon =
+                    rawValue !=
+                    0;
+
+                continue;
+            }
+
+            if (
+                !TrySkipDeadlock10025Field(
+                    payload,
+                    ref offset,
+                    wireType
+                )
+            )
+            {
+                return BuildDeadlock10025Result(
+                    false,
+                    lobbyId,
+                    0,
+                    safeToAbandon,
+                    "malformed_unknown_field"
+                );
+            }
+        }
+
+        if (
+            !hasLobbyId ||
+            lobbyId ==
+                0
+        )
+        {
+            return BuildDeadlock10025Result(
+                false,
+                lobbyId,
+                0,
+                safeToAbandon,
+                "missing_lobby_id"
+            );
+        }
+
+        /*
+         * Current ELobbyServerState values used by Deadlock:
+         *
+         *   0 Assign
+         *   1 InGame
+         *   2 PostMatch
+         *   3 SignedOut
+         *   4 Abandoned
+         */
+        if (
+            serverState >
+            4
+        )
+        {
+            _logger.LogWarning(
+                "Rejected Deadlock 10025 lobby {LobbyId}: invalid state {ServerState}",
+                lobbyId,
+                serverState
+            );
+
+            return BuildDeadlock10025Result(
+                false,
+                lobbyId,
+                0,
+                safeToAbandon,
+                "invalid_server_state"
+            );
+        }
+
+        var reservationProvider =
+            DeadlockGcRuntimeServices
+                .DedicatedServerSnapshot;
+
+        if (
+            reservationProvider ==
+            null
+        )
+        {
+            return BuildDeadlock10025Result(
+                false,
+                lobbyId,
+                serverState,
+                safeToAbandon,
+                "reservation_provider_missing"
+            );
+        }
+
+        var reservation =
+            reservationProvider(
+                lobbyId
+            );
+
+        if (
+            reservation ==
+                null ||
+            !reservation.Found
+        )
+        {
+            _logger.LogWarning(
+                "Rejected Deadlock 10025 SteamID {SteamId}: lobby {LobbyId} has no dedicated reservation",
+                _context.SteamId,
+                lobbyId
+            );
+
+            return BuildDeadlock10025Result(
+                false,
+                lobbyId,
+                serverState,
+                safeToAbandon,
+                "reservation_not_found"
+            );
+        }
+
+        if (
+            reservation.GameServerSteamId !=
+            _context.SteamId
+        )
+        {
+            _logger.LogWarning(
+                "Rejected Deadlock 10025 lobby {LobbyId}: sender {SteamId} != reserved GameServer {ReservedSteamId}",
+                lobbyId,
+                _context.SteamId,
+                reservation.GameServerSteamId
+            );
+
+            return BuildDeadlock10025Result(
+                false,
+                lobbyId,
+                serverState,
+                safeToAbandon,
+                "wrong_gameserver_for_lobby"
+            );
+        }
+
+        DeadlockGcRuntimeServices
+            .UpdateLobbyLifecycle(
+                lobbyId,
+                _context.SteamId,
+                serverState,
+                safeToAbandon
+            );
+
+        var stateName =
+            Deadlock10025StateName(
+                serverState
+            );
+
+        _logger.LogInformation(
+            "Deadlock 10025 lifecycle lobby {LobbyId} server {GameServerSteamId}: state={ServerState} ({StateName}) safeToAbandon={SafeToAbandon}",
+            lobbyId,
+            _context.SteamId,
+            serverState,
+            stateName,
+            safeToAbandon
+        );
+
+        return BuildDeadlock10025Result(
+            true,
+            lobbyId,
+            serverState,
+            safeToAbandon,
+            "ok"
+        );
+    }
+
+    private static TsValue BuildDeadlock10025Result(
+        bool accepted,
+        ulong lobbyId,
+        uint serverState,
+        bool safeToAbandon,
+        string reason)
+    {
+        var result =
+            new TsObject(
+                "DeadlockLobbyServerStateUpdateResult"
+            );
+
+        result.SetField(
+            "accepted",
+            TsValue.FromBool(
+                accepted
+            )
+        );
+
+        /*
+         * Keep uint64 out of JS number space.
+         */
+        result.SetField(
+            "lobbyId",
+            TsValue.FromString(
+                lobbyId.ToString(
+                    System.Globalization.CultureInfo.InvariantCulture
+                )
+            )
+        );
+
+        result.SetField(
+            "lobbyIdValue",
+            TsValue.FromUInt64(
+                lobbyId
+            )
+        );
+
+        result.SetField(
+            "serverState",
+            TsValue.FromInt32(
+                unchecked(
+                    (int)serverState
+                )
+            )
+        );
+
+        result.SetField(
+            "serverStateName",
+            TsValue.FromString(
+                Deadlock10025StateName(
+                    serverState
+                )
+            )
+        );
+
+        result.SetField(
+            "safeToAbandon",
+            TsValue.FromBool(
+                safeToAbandon
+            )
+        );
+
+        result.SetField(
+            "reason",
+            TsValue.FromString(
+                reason ??
+                string.Empty
+            )
+        );
+
+        return new TsObjectValue(
+            result
+        );
+    }
+
+    private static string Deadlock10025StateName(
+        uint serverState)
+    {
+        return serverState switch
+        {
+            0 => "Assign",
+            1 => "InGame",
+            2 => "PostMatch",
+            3 => "SignedOut",
+            4 => "Abandoned",
+            _ => "Unknown"
+        };
+    }
+
+    private static bool TryReadDeadlock10025VarUInt64(
+        byte[] payload,
+        ref int offset,
+        out ulong value)
+    {
+        value =
+            0;
+
+        for (
+            var i = 0;
+            i < 10;
+            i++
+        )
+        {
+            if (
+                offset >=
+                payload.Length
+            )
+            {
+                return false;
+            }
+
+            var current =
+                payload[
+                    offset++
+                ];
+
+            var low =
+                unchecked(
+                    (ulong)(
+                        current &
+                        0x7f
+                    )
+                );
+
+            /*
+             * A uint64 varint may use at most one payload bit
+             * in its tenth byte.
+             */
+            if (
+                i ==
+                    9 &&
+                low >
+                    1
+            )
+            {
+                return false;
+            }
+
+            value |=
+                low <<
+                (
+                    i *
+                    7
+                );
+
+            if (
+                (
+                    current &
+                    0x80
+                ) ==
+                0
+            )
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool TrySkipDeadlock10025Field(
+        byte[] payload,
+        ref int offset,
+        int wireType)
+    {
+        switch (
+            wireType
+        )
+        {
+            case 0:
+            {
+                return TryReadDeadlock10025VarUInt64(
+                    payload,
+                    ref offset,
+                    out _
+                );
+            }
+
+            case 1:
+            {
+                if (
+                    offset >
+                    payload.Length -
+                    8
+                )
+                {
+                    return false;
+                }
+
+                offset +=
+                    8;
+
+                return true;
+            }
+
+            case 2:
+            {
+                if (
+                    !TryReadDeadlock10025VarUInt64(
+                        payload,
+                        ref offset,
+                        out var length
+                    )
+                )
+                {
+                    return false;
+                }
+
+                var remaining =
+                    payload.Length -
+                    offset;
+
+                if (
+                    length >
+                    unchecked(
+                        (ulong)remaining
+                    )
+                )
+                {
+                    return false;
+                }
+
+                offset +=
+                    unchecked(
+                        (int)length
+                    );
+
+                return true;
+            }
+
+            case 5:
+            {
+                if (
+                    offset >
+                    payload.Length -
+                    4
+                )
+                {
+                    return false;
+                }
+
+                offset +=
+                    4;
+
+                return true;
+            }
+
+            default:
+            {
+                /*
+                 * Groups (wire 3/4) are not expected here.
+                 * Reject rather than trying to guess.
+                 */
+                return false;
+            }
+        }
+    }
+
+
+    // SKYNET_DEADLOCK_EPHEMERAL_MATCH_LOBBY_V1_HOST
+    private static long deadlockEphemeralMatchLobbySequence =
+        DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() *
+        1000L;
+
+    public TsValue DeadlockAllocateEphemeralMatchLobbyId(
+        TsValue[] args)
+    {
+        if (
+            args.Length <
+            1
+        )
+        {
+            throw new InvalidOperationException(
+                "deadlockAllocateEphemeralMatchLobbyId(partyId) requires partyId"
+            );
+        }
+
+        var partyId =
+            Convert.ToUInt64(
+                ToInteger(
+                    args[0],
+                    "deadlockAllocateEphemeralMatchLobbyId.partyId"
+                ).ToString()
+            );
+
+        var sequence =
+            System.Threading.Interlocked.Increment(
+                ref deadlockEphemeralMatchLobbySequence
+            );
+
+        var lobbyId =
+            100_000_000_000_000_000UL +
+            unchecked(
+                (ulong)sequence
+            );
+
+        _logger.LogInformation(
+            "Allocated ephemeral Deadlock match lobby {LobbyId} for party {PartyId}",
+            lobbyId,
+            partyId
+        );
+
+        return TsValue.FromUInt64(
+            lobbyId
+        );
+    }
+
+    // SKYNET_DEADLOCK_SEARCHABLE_MATCH_ID_V28_HOST
+    // The client hideout accepts at most ten digits. Allocation is delegated
+    // to deadlock.db so IDs remain unique across process restarts without
+    // creating placeholder Matches rows.
+
+    public TsValue DeadlockAllocateEphemeralMatchId(
+        TsValue[] args)
+    {
+        if (
+            args.Length <
+            2
+        )
+        {
+            throw new InvalidOperationException(
+                "deadlockAllocateEphemeralMatchId(partyId, lobbyId) requires both IDs"
+            );
+        }
+
+        var partyId =
+            Convert.ToUInt64(
+                ToInteger(
+                    args[0],
+                    "deadlockAllocateEphemeralMatchId.partyId"
+                ).ToString()
+            );
+
+        var lobbyId =
+            Convert.ToUInt64(
+                ToInteger(
+                    args[1],
+                    "deadlockAllocateEphemeralMatchId.lobbyId"
+                ).ToString()
+            );
+
+        if (
+            partyId ==
+                0 ||
+            lobbyId ==
+                0
+        )
+        {
+            return TsValue.FromUInt64(
+                0
+            );
+        }
+
+        var matchId =
+            DeadlockGcRuntimeServices
+                .MatchIdAllocator?
+                .Invoke() ??
+            0UL;
+
+        if (
+            matchId <
+                1_000_000_000UL ||
+            matchId >
+                9_999_999_999UL
+        )
+        {
+            throw new InvalidOperationException(
+                "Deadlock Match ID allocator returned an invalid ten-digit ID"
+            );
+        }
+
+        _logger.LogInformation(
+            "Allocated ephemeral Deadlock match {MatchId} for lobby {LobbyId}, party {PartyId}",
+            matchId,
+            lobbyId,
+            partyId
+        );
+
+        return TsValue.FromUInt64(
+            matchId
+        );
+    }
+
+    public TsValue DeadlockStartDedicatedServer(
+        TsValue[] args)
+    {
+        if (
+            args.Length <
+            1
+        )
+        {
+            throw new InvalidOperationException(
+                "deadlockStartDedicatedServer(lobbyId, map?, botDifficulty?) requires lobbyId"
+            );
+        }
+
+        var lobbyId =
+            Convert.ToUInt64(
+                ToInteger(
+                    args[0],
+                    "deadlockStartDedicatedServer.lobbyId"
+                ).ToString()
+            );
+
+        var map =
+            args.Length >
+            1
+                ? ToString(
+                    args[1]
+                )
+                : string.Empty;
+
+        // SKYNET_DEADLOCK_CONDITIONAL_BOTS_V1_HOST
+        var requestedBotDifficulty =
+            args.Length >
+            2
+                ? Convert.ToUInt32(
+                    ToNumber(
+                        args[2],
+                        "deadlockStartDedicatedServer.botDifficulty"
+                    )
+                )
+                : 0U;
+
+        var botDifficulty =
+            Math.Min(
+                requestedBotDifficulty,
+                5U
+            );
+
+        var result =
+            DeadlockGcRuntimeServices
+                .DedicatedServerStart?
+                .Invoke(
+                    lobbyId,
+                    map,
+                    botDifficulty
+                );
+
+        if (
+            result ==
+            null
+        )
+        {
+            return TsValue.Null;
+        }
+
+        var value =
+            new TsObject(
+                "DeadlockDedicatedLaunchResult"
+            );
+
+        value.SetField(
+            "started",
+            TsValue.FromBool(
+                result.Started
+            )
+        );
+
+        value.SetField(
+            "port",
+            TsValue.FromInt32(
+                result.Port
+            )
+        );
+
+        value.SetField(
+            "state",
+            TsValue.FromString(
+                result.State.ToString()
+            )
+        );
+
+        value.SetField(
+            "error",
+            TsValue.FromString(
+                result.Error ??
+                string.Empty
+            )
+        );
+
+        _logger.LogInformation(
+            "Deadlock dedicated start lobby={LobbyId} botDifficulty={BotDifficulty} bots={Bots} started={Started} port={Port} state={State} error={Error}",
+            lobbyId,
+            botDifficulty,
+            botDifficulty > 0,
+            result.Started,
+            result.Port,
+            result.State,
+            result.Error
+        );
+
+        return new TsObjectValue(
+            value
+        );
+    }
+
+    public TsValue DeadlockDedicatedServerState(
+        TsValue[] args)
+    {
+        if (
+            args.Length <
+            1
+        )
+        {
+            throw new InvalidOperationException(
+                "deadlockDedicatedServerState(lobbyId) requires lobbyId"
+            );
+        }
+
+        var lobbyId =
+            Convert.ToUInt64(
+                ToInteger(
+                    args[0],
+                    "deadlockDedicatedServerState.lobbyId"
+                ).ToString()
+            );
+
+        var provider =
+            DeadlockGcRuntimeServices
+                .DedicatedServerSnapshot;
+
+        if (
+            provider ==
+            null
+        )
+        {
+            return TsValue.Null;
+        }
+
+        var snapshot =
+            provider(
+                lobbyId
+            );
+
+        var value =
+            new TsObject(
+                "DeadlockDedicatedServerState"
+            );
+
+        value.SetField(
+            "found",
+            TsValue.FromBool(
+                snapshot.Found
+            )
+        );
+
+        value.SetField(
+            "lobbyId",
+            TsValue.FromUInt64(
+                snapshot.LobbyId
+            )
+        );
+
+        value.SetField(
+            "port",
+            TsValue.FromInt32(
+                snapshot.Port
+            )
+        );
+
+        value.SetField(
+            "map",
+            TsValue.FromString(
+                snapshot.Map ??
+                string.Empty
+            )
+        );
+
+        value.SetField(
+            "state",
+            TsValue.FromString(
+                snapshot.State.ToString()
+            )
+        );
+
+        value.SetField(
+            "gameServerSteamId",
+            TsValue.FromUInt64(
+                snapshot.GameServerSteamId
+            )
+        );
+
+        value.SetField(
+            "publicIp",
+            TsValue.FromInt64(
+                snapshot.PublicIp
+            )
+        );
+
+        value.SetField(
+            "error",
+            TsValue.FromString(
+                snapshot.Error ??
+                string.Empty
+            )
+        );
+
+        var ready =
+            snapshot.Found &&
+            snapshot.GameServerSteamId !=
+                0 &&
+            snapshot.Port >
+                0 &&
+            (
+                snapshot.State ==
+                    DeadlockDedicatedServerSupervisor
+                        .DedicatedReservationState
+                        .Registered ||
+                snapshot.State ==
+                    DeadlockDedicatedServerSupervisor
+                        .DedicatedReservationState
+                        .Claimed
+            );
+
+        value.SetField(
+            "ready",
+            TsValue.FromBool(
+                ready
+            )
+        );
+
+        return new TsObjectValue(
+            value
+        );
+    }
+
+    // SKYNET_DEADLOCK_PER_CLIENT_CONNECT_IP_V29_HOST
+    public TsValue DeadlockResolveClientConnectIp(
+        TsValue[] args)
+    {
+        if (
+            args.Length <
+            2
+        )
+        {
+            throw new InvalidOperationException(
+                "deadlockResolveClientConnectIp(accountId, registeredIp) requires two arguments"
+            );
+        }
+
+        var accountId =
+            checked(
+                (uint)ToInteger(
+                    args[0],
+                    "deadlockResolveClientConnectIp.accountId"
+                )
+            );
+
+        var registeredIp =
+            checked(
+                (uint)ToInteger(
+                    args[1],
+                    "deadlockResolveClientConnectIp.registeredIp"
+                )
+            );
+
+        var resolvedIp =
+            DeadlockGcRuntimeServices
+                .ClientConnectIpResolver?
+                .Invoke(
+                    accountId,
+                    registeredIp
+                ) ??
+            registeredIp;
+
+        _logger.LogInformation(
+            "Deadlock connect IP resolved account={AccountId} registered={RegisteredIp} resolved={ResolvedIp}",
+            accountId,
+            registeredIp,
+            resolvedIp
+        );
+
+        return TsValue.FromInt64(
+            resolvedIp
+        );
+    }
+
+    public TsValue DeadlockReleaseDedicatedServer(
+        TsValue[] args)
+    {
+        if (
+            args.Length <
+            1
+        )
+        {
+            throw new InvalidOperationException(
+                "deadlockReleaseDedicatedServer(lobbyId, reason?) requires lobbyId"
+            );
+        }
+
+        var lobbyId =
+            Convert.ToUInt64(
+                ToInteger(
+                    args[0],
+                    "deadlockReleaseDedicatedServer.lobbyId"
+                ).ToString()
+            );
+
+        var reason =
+            args.Length >
+            1
+                ? ToString(
+                    args[1]
+                )
+                : string.Empty;
+
+        return TsValue.FromBool(
+            DeadlockGcRuntimeServices
+                .DedicatedServerRelease?
+                .Invoke(
+                    lobbyId,
+                    reason
+                )
+            ??
+            false
+        );
+    }
+
+    // SKYNET_DEADLOCK_REAL_10014_DECODER_V2_HOST
+    //
+    // Authoritative READ-ONLY decoder for:
+    //
+    //   10014 CMsgServerToGCMatchSignout
+    //
+    // This diagnostic host NEVER writes DB/profile/ranked state.
+    // Any exception is caught locally so the TypeScript handler can
+    // still send 10015 Success(4) and schedule its existing release.
+    //
+    public TsValue DeadlockInspectCurrentMatchSignoutV2()
+    {
+        static ulong ReadVarUInt64(
+            byte[] data,
+            ref int offset,
+            string label)
+        {
+            ulong value =
+                0;
+
+            for (
+                var index = 0;
+                index < 10;
+                index++
+            )
+            {
+                if (
+                    offset >=
+                    data.Length
+                )
+                {
+                    throw new InvalidOperationException(
+                        label +
+                        ": truncated varint"
+                    );
+                }
+
+                var current =
+                    data[
+                        offset++
+                    ];
+
+                var low =
+                    unchecked(
+                        (ulong)(
+                            current &
+                            0x7f
+                        )
+                    );
+
+                if (
+                    index ==
+                        9 &&
+                    low >
+                        1
+                )
+                {
+                    throw new InvalidOperationException(
+                        label +
+                        ": uint64 varint overflow"
+                    );
+                }
+
+                value |=
+                    low <<
+                    (
+                        index *
+                        7
+                    );
+
+                if (
+                    (
+                        current &
+                        0x80
+                    ) ==
+                    0
+                )
+                {
+                    return value;
+                }
+            }
+
+            throw new InvalidOperationException(
+                label +
+                ": malformed varint"
+            );
+        }
+
+        static uint ReadUInt32(
+            byte[] data,
+            ref int offset,
+            string label)
+        {
+            var value =
+                ReadVarUInt64(
+                    data,
+                    ref offset,
+                    label
+                );
+
+            if (
+                value >
+                uint.MaxValue
+            )
+            {
+                throw new InvalidOperationException(
+                    label +
+                    ": uint32 overflow"
+                );
+            }
+
+            return unchecked(
+                (uint)value
+            );
+        }
+
+        static int ReadInt32(
+            byte[] data,
+            ref int offset,
+            string label)
+        {
+            var value =
+                ReadVarUInt64(
+                    data,
+                    ref offset,
+                    label
+                );
+
+            return unchecked(
+                (int)value
+            );
+        }
+
+        static byte[] ReadBytes(
+            byte[] data,
+            ref int offset,
+            string label)
+        {
+            var rawLength =
+                ReadVarUInt64(
+                    data,
+                    ref offset,
+                    label +
+                    ".length"
+                );
+
+            if (
+                rawLength >
+                int.MaxValue
+            )
+            {
+                throw new InvalidOperationException(
+                    label +
+                    ": length overflow"
+                );
+            }
+
+            var length =
+                unchecked(
+                    (int)rawLength
+                );
+
+            if (
+                length <
+                    0 ||
+                offset >
+                    data.Length -
+                    length
+            )
+            {
+                throw new InvalidOperationException(
+                    label +
+                    ": truncated length-delimited field"
+                );
+            }
+
+            var value =
+                new byte[
+                    length
+                ];
+
+            if (
+                length >
+                0
+            )
+            {
+                Buffer.BlockCopy(
+                    data,
+                    offset,
+                    value,
+                    0,
+                    length
+                );
+            }
+
+            offset +=
+                length;
+
+            return value;
+        }
+
+        static float ReadFloat32(
+            byte[] data,
+            ref int offset,
+            string label)
+        {
+            if (
+                offset >
+                data.Length -
+                4
+            )
+            {
+                throw new InvalidOperationException(
+                    label +
+                    ": truncated fixed32"
+                );
+            }
+
+            var bits =
+                data[
+                    offset
+                ] |
+                (
+                    data[
+                        offset +
+                        1
+                    ] <<
+                    8
+                ) |
+                (
+                    data[
+                        offset +
+                        2
+                    ] <<
+                    16
+                ) |
+                (
+                    data[
+                        offset +
+                        3
+                    ] <<
+                    24
+                );
+
+            offset +=
+                4;
+
+            return BitConverter.Int32BitsToSingle(
+                bits
+            );
+        }
+
+        static void SkipField(
+            byte[] data,
+            ref int offset,
+            int wireType,
+            string label)
+        {
+            switch (
+                wireType
+            )
+            {
+                case 0:
+                {
+                    ReadVarUInt64(
+                        data,
+                        ref offset,
+                        label
+                    );
+
+                    return;
+                }
+
+                case 1:
+                {
+                    if (
+                        offset >
+                        data.Length -
+                        8
+                    )
+                    {
+                        throw new InvalidOperationException(
+                            label +
+                            ": truncated fixed64"
+                        );
+                    }
+
+                    offset +=
+                        8;
+
+                    return;
+                }
+
+                case 2:
+                {
+                    var rawLength =
+                        ReadVarUInt64(
+                            data,
+                            ref offset,
+                            label +
+                            ".length"
+                        );
+
+                    if (
+                        rawLength >
+                        int.MaxValue
+                    )
+                    {
+                        throw new InvalidOperationException(
+                            label +
+                            ": length overflow"
+                        );
+                    }
+
+                    var length =
+                        unchecked(
+                            (int)rawLength
+                        );
+
+                    if (
+                        length <
+                            0 ||
+                        offset >
+                            data.Length -
+                            length
+                    )
+                    {
+                        throw new InvalidOperationException(
+                            label +
+                            ": truncated bytes"
+                        );
+                    }
+
+                    offset +=
+                        length;
+
+                    return;
+                }
+
+                case 5:
+                {
+                    if (
+                        offset >
+                        data.Length -
+                        4
+                    )
+                    {
+                        throw new InvalidOperationException(
+                            label +
+                            ": truncated fixed32"
+                        );
+                    }
+
+                    offset +=
+                        4;
+
+                    return;
+                }
+
+                default:
+                {
+                    throw new InvalidOperationException(
+                        label +
+                        ": unsupported wire type " +
+                        wireType
+                    );
+                }
+            }
+        }
+
+        static string MatchModeName(
+            uint value)
+        {
+            switch (
+                value
+            )
+            {
+                case 0:
+                    return "Invalid";
+
+                case 1:
+                    return "Unranked";
+
+                case 2:
+                    return "PrivateLobby";
+
+                case 3:
+                    return "CoopBot";
+
+                case 4:
+                    return "Ranked";
+
+                case 5:
+                    return "ServerTest";
+
+                case 6:
+                    return "Tutorial";
+
+                case 7:
+                    return "HeroLabs";
+
+                case 8:
+                    return "NewPlayerPlacement";
+
+                default:
+                    return "Unknown";
+            }
+        }
+
+        static string GameModeName(
+            uint value)
+        {
+            switch (
+                value
+            )
+            {
+                case 0:
+                    return "Invalid";
+
+                case 1:
+                    return "Normal";
+
+                case 2:
+                    return "1v1Test";
+
+                case 3:
+                    return "Sandbox";
+
+                case 4:
+                    return "StreetBrawl";
+
+                case 5:
+                    return "ExploreNYC";
+
+                case 6:
+                    return "Internal";
+
+                default:
+                    return "Unknown";
+            }
+        }
+
+        static string TeamName(
+            uint value)
+        {
+            switch (
+                value
+            )
+            {
+                case 0:
+                    return "Team0";
+
+                case 1:
+                    return "Team1";
+
+                case 16:
+                    return "Spectator";
+
+                default:
+                    return "Unknown";
+            }
+        }
+
+        static string EndReasonName(
+            uint value)
+        {
+            switch (
+                value
+            )
+            {
+                case 0:
+                    return "TeamWin";
+
+                case 1:
+                    return "MatchDraw";
+
+                case 2:
+                    return "AllAbandoned";
+
+                case 3:
+                    return "NetworkIssues";
+
+                case 4:
+                    return "MatchLength";
+
+                case 5:
+                    return "PlayerNeverConnected";
+
+                default:
+                    return "Unknown";
+            }
+        }
+
+        static string OutcomeName(
+            uint value)
+        {
+            switch (
+                value
+            )
+            {
+                case 0:
+                    return "Invalid";
+
+                case 1:
+                    return "Win";
+
+                case 2:
+                    return "Loss";
+
+                case 3:
+                    return "Penalized";
+
+                case 4:
+                    return "PenalizedParty";
+
+                case 5:
+                    return "NotScored";
+
+                default:
+                    return "Unknown";
+            }
+        }
+
+        static string ExtraTypeName(
+            uint value)
+        {
+            switch (
+                value
+            )
+            {
+                case 2:
+                    return "Disconnections";
+
+                case 3:
+                    return "AccountStatChanges";
+
+                case 4:
+                    return "DetailedStats";
+
+                case 5:
+                    return "ServerPerfStats";
+
+                case 6:
+                    return "PerfData";
+
+                case 7:
+                    return "PlayerChat";
+
+                case 8:
+                    return "BookRewards";
+
+                case 9:
+                    return "PenalizedPlayers";
+
+                case 11:
+                    return "MatchDevStats";
+
+                case 12:
+                    return "ChallengeProgress";
+
+                case 13:
+                    return "HeroXPGrant";
+
+                case 14:
+                    return "MatchKills";
+
+                case 15:
+                    return "PlayerBehavior";
+
+                case 16:
+                    return "StreetBrawlData";
+
+                case 17:
+                    return "HeroDraftData";
+
+                default:
+                    return "Unknown";
+            }
+        }
+
+        static string LocalPersistencePolicy(
+            uint matchMode)
+        {
+            switch (
+                matchMode
+            )
+            {
+                case 2:
+                    return "EPHEMERAL_PRIVATE";
+
+                case 1:
+                    return "CANDIDATE_UNRANKED";
+
+                case 4:
+                    return "CANDIDATE_RANKED";
+
+                default:
+                    return "READ_ONLY_UNCLASSIFIED";
+            }
+        }
+
+        static (
+            uint MsgType,
+            byte[] Contents,
+            ulong MsgKey,
+            bool Compressed
+        ) ParseExtraBlock(
+            byte[] block)
+        {
+            uint msgType =
+                0;
+
+            byte[] contents =
+                Array.Empty<byte>();
+
+            ulong msgKey =
+                0;
+
+            var compressed =
+                false;
+
+            var offset =
+                0;
+
+            while (
+                offset <
+                block.Length
+            )
+            {
+                var key =
+                    ReadVarUInt64(
+                        block,
+                        ref offset,
+                        "extra.key"
+                    );
+
+                var field =
+                    unchecked(
+                        (int)(
+                            key >>
+                            3
+                        )
+                    );
+
+                var wire =
+                    unchecked(
+                        (int)(
+                            key &
+                            7
+                        )
+                    );
+
+                if (
+                    field <=
+                    0
+                )
+                {
+                    throw new InvalidOperationException(
+                        "extra: invalid field number"
+                    );
+                }
+
+                if (
+                    field ==
+                    1
+                )
+                {
+                    if (
+                        wire !=
+                        0
+                    )
+                    {
+                        throw new InvalidOperationException(
+                            "extra.msg_type: invalid wire type"
+                        );
+                    }
+
+                    msgType =
+                        ReadUInt32(
+                            block,
+                            ref offset,
+                            "extra.msg_type"
+                        );
+
+                    continue;
+                }
+
+                if (
+                    field ==
+                    2
+                )
+                {
+                    if (
+                        wire !=
+                        2
+                    )
+                    {
+                        throw new InvalidOperationException(
+                            "extra.contents: invalid wire type"
+                        );
+                    }
+
+                    contents =
+                        ReadBytes(
+                            block,
+                            ref offset,
+                            "extra.contents"
+                        );
+
+                    continue;
+                }
+
+                if (
+                    field ==
+                    3
+                )
+                {
+                    if (
+                        wire !=
+                        0
+                    )
+                    {
+                        throw new InvalidOperationException(
+                            "extra.msg_key: invalid wire type"
+                        );
+                    }
+
+                    msgKey =
+                        ReadVarUInt64(
+                            block,
+                            ref offset,
+                            "extra.msg_key"
+                        );
+
+                    continue;
+                }
+
+                if (
+                    field ==
+                    4
+                )
+                {
+                    if (
+                        wire !=
+                        0
+                    )
+                    {
+                        throw new InvalidOperationException(
+                            "extra.is_compressed: invalid wire type"
+                        );
+                    }
+
+                    compressed =
+                        ReadVarUInt64(
+                            block,
+                            ref offset,
+                            "extra.is_compressed"
+                        ) !=
+                        0;
+
+                    continue;
+                }
+
+                SkipField(
+                    block,
+                    ref offset,
+                    wire,
+                    "extra.unknown." +
+                    field
+                );
+            }
+
+            return (
+                msgType,
+                contents,
+                msgKey,
+                compressed
+            );
+        }
+
+        static void ParseAccountStatChanges(
+            byte[] payload,
+            List<(
+                uint AccountId,
+                uint HeroId,
+                uint StatId,
+                uint Value,
+                uint Medal
+            )> result)
+        {
+            static (
+                uint HeroId,
+                uint StatId,
+                uint Value,
+                uint Medal
+            ) ParseStat(
+                byte[] payload)
+            {
+                uint heroId =
+                    0;
+
+                uint statId =
+                    0;
+
+                uint value =
+                    0;
+
+                uint medal =
+                    0;
+
+                var offset =
+                    0;
+
+                while (
+                    offset <
+                    payload.Length
+                )
+                {
+                    var key =
+                        ReadVarUInt64(
+                            payload,
+                            ref offset,
+                            "accountStat.stat.key"
+                        );
+
+                    var field =
+                        unchecked(
+                            (int)(
+                                key >>
+                                3
+                            )
+                        );
+
+                    var wire =
+                        unchecked(
+                            (int)(
+                                key &
+                                7
+                            )
+                        );
+
+                    if (
+                        field >=
+                            1 &&
+                        field <=
+                            4
+                    )
+                    {
+                        if (
+                            wire !=
+                            0
+                        )
+                        {
+                            throw new InvalidOperationException(
+                                "accountStat.stat." +
+                                field +
+                                ": invalid wire type"
+                            );
+                        }
+
+                        var parsed =
+                            ReadUInt32(
+                                payload,
+                                ref offset,
+                                "accountStat.stat." +
+                                field
+                            );
+
+                        switch (
+                            field
+                        )
+                        {
+                            case 1:
+                                heroId = parsed;
+                                break;
+
+                            case 2:
+                                statId = parsed;
+                                break;
+
+                            case 3:
+                                value = parsed;
+                                break;
+
+                            case 4:
+                                medal = parsed;
+                                break;
+                        }
+
+                        continue;
+                    }
+
+                    SkipField(
+                        payload,
+                        ref offset,
+                        wire,
+                        "accountStat.stat.unknown." +
+                        field
+                    );
+                }
+
+                return (
+                    heroId,
+                    statId,
+                    value,
+                    medal
+                );
+            }
+
+            var offset =
+                0;
+
+            while (
+                offset <
+                payload.Length
+            )
+            {
+                var key =
+                    ReadVarUInt64(
+                        payload,
+                        ref offset,
+                        "accountStatChanges.key"
+                    );
+
+                var field =
+                    unchecked(
+                        (int)(
+                            key >>
+                            3
+                        )
+                    );
+
+                var wire =
+                    unchecked(
+                        (int)(
+                            key &
+                            7
+                        )
+                    );
+
+                if (
+                    field !=
+                    1
+                )
+                {
+                    SkipField(
+                        payload,
+                        ref offset,
+                        wire,
+                        "accountStatChanges.unknown." +
+                        field
+                    );
+
+                    continue;
+                }
+
+                if (
+                    wire !=
+                    2
+                )
+                {
+                    throw new InvalidOperationException(
+                        "accountStatChanges.account_stats: invalid wire type"
+                    );
+                }
+
+                var accountPayload =
+                    ReadBytes(
+                        payload,
+                        ref offset,
+                        "accountStatChanges.account_stats"
+                    );
+
+                uint accountId =
+                    0;
+
+                var statPayloads =
+                    new List<byte[]>();
+
+                var accountOffset =
+                    0;
+
+                while (
+                    accountOffset <
+                    accountPayload.Length
+                )
+                {
+                    var accountKey =
+                        ReadVarUInt64(
+                            accountPayload,
+                            ref accountOffset,
+                            "accountStat.account.key"
+                        );
+
+                    var accountField =
+                        unchecked(
+                            (int)(
+                                accountKey >>
+                                3
+                            )
+                        );
+
+                    var accountWire =
+                        unchecked(
+                            (int)(
+                                accountKey &
+                                7
+                            )
+                        );
+
+                    if (
+                        accountField ==
+                        1
+                    )
+                    {
+                        if (
+                            accountWire !=
+                            0
+                        )
+                        {
+                            throw new InvalidOperationException(
+                                "accountStat.account_id: invalid wire type"
+                            );
+                        }
+
+                        accountId =
+                            ReadUInt32(
+                                accountPayload,
+                                ref accountOffset,
+                                "accountStat.account_id"
+                            );
+
+                        continue;
+                    }
+
+                    if (
+                        accountField ==
+                        2
+                    )
+                    {
+                        if (
+                            accountWire !=
+                            2
+                        )
+                        {
+                            throw new InvalidOperationException(
+                                "accountStat.stats: invalid wire type"
+                            );
+                        }
+
+                        statPayloads.Add(
+                            ReadBytes(
+                                accountPayload,
+                                ref accountOffset,
+                                "accountStat.stats"
+                            )
+                        );
+
+                        continue;
+                    }
+
+                    SkipField(
+                        accountPayload,
+                        ref accountOffset,
+                        accountWire,
+                        "accountStat.account.unknown." +
+                        accountField
+                    );
+                }
+
+                foreach (
+                    var statPayload in
+                    statPayloads
+                )
+                {
+                    var stat =
+                        ParseStat(
+                            statPayload
+                        );
+
+                    result.Add(
+                        (
+                            accountId,
+                            stat.HeroId,
+                            stat.StatId,
+                            stat.Value,
+                            stat.Medal
+                        )
+                    );
+                }
+            }
+        }
+
+        static uint ParsePlayerItemId(
+            byte[] payload)
+        {
+            uint itemId =
+                0;
+
+            var offset =
+                0;
+
+            while (
+                offset <
+                payload.Length
+            )
+            {
+                var key =
+                    ReadVarUInt64(
+                        payload,
+                        ref offset,
+                        "playerItem.key"
+                    );
+
+                var field =
+                    unchecked(
+                        (int)(
+                            key >>
+                            3
+                        )
+                    );
+
+                var wire =
+                    unchecked(
+                        (int)(
+                            key &
+                            7
+                        )
+                    );
+
+                if (
+                    field ==
+                    1
+                )
+                {
+                    if (
+                        wire !=
+                        0
+                    )
+                    {
+                        throw new InvalidOperationException(
+                            "playerItem.item_id: invalid wire type"
+                        );
+                    }
+
+                    itemId =
+                        ReadUInt32(
+                            payload,
+                            ref offset,
+                            "playerItem.item_id"
+                        );
+
+                    continue;
+                }
+
+                SkipField(
+                    payload,
+                    ref offset,
+                    wire,
+                    "playerItem.unknown." +
+                    field
+                );
+            }
+
+            return itemId;
+        }
+
+        try
+        {
+            if (
+                _request.MessageType !=
+                10014
+            )
+            {
+                return TsValue.FromBool(
+                    false
+                );
+            }
+
+            var validator =
+                DeadlockGcRuntimeServices
+                    .DedicatedGameServerValidator;
+
+            if (
+                validator ==
+                    null ||
+                !validator(
+                    _context.SteamId
+                )
+            )
+            {
+                _logger.LogWarning(
+                    "[10014-V2] rejected SteamID {SteamId}: not a registered dedicated",
+                    _context.SteamId
+                );
+
+                return TsValue.FromBool(
+                    false
+                );
+            }
+
+            byte[] payload;
+
+            try
+            {
+                payload =
+                    Convert.FromBase64String(
+                        _request.BodyBase64 ??
+                        string.Empty
+                    );
+            }
+            catch (
+                FormatException ex
+            )
+            {
+                _logger.LogWarning(
+                    ex,
+                    "[10014-V2] invalid BodyBase64 from SteamID {SteamId}",
+                    _context.SteamId
+                );
+
+                return TsValue.FromBool(
+                    false
+                );
+            }
+
+            ulong lobbyId =
+                0;
+
+            ulong matchId =
+                0;
+
+            uint signoutAttempt =
+                0;
+
+            uint clusterId =
+                0;
+
+            byte[] matchData =
+                Array.Empty<byte>();
+
+            var hasLobbyId =
+                false;
+
+            var hasMatchId =
+                false;
+
+            var hasMatchData =
+                false;
+
+            var extras =
+                new List<(
+                    uint MsgType,
+                    byte[] Contents,
+                    ulong MsgKey,
+                    bool Compressed
+                )>();
+
+            var outerOffset =
+                0;
+
+            while (
+                outerOffset <
+                payload.Length
+            )
+            {
+                var key =
+                    ReadVarUInt64(
+                        payload,
+                        ref outerOffset,
+                        "10014.outer.key"
+                    );
+
+                var field =
+                    unchecked(
+                        (int)(
+                            key >>
+                            3
+                        )
+                    );
+
+                var wire =
+                    unchecked(
+                        (int)(
+                            key &
+                            7
+                        )
+                    );
+
+                if (
+                    field <=
+                    0
+                )
+                {
+                    throw new InvalidOperationException(
+                        "10014.outer: invalid field number"
+                    );
+                }
+
+                if (
+                    field ==
+                    1
+                )
+                {
+                    if (
+                        wire !=
+                        2
+                    )
+                    {
+                        throw new InvalidOperationException(
+                            "10014.additional_data: invalid wire type"
+                        );
+                    }
+
+                    extras.Add(
+                        ParseExtraBlock(
+                            ReadBytes(
+                                payload,
+                                ref outerOffset,
+                                "10014.additional_data"
+                            )
+                        )
+                    );
+
+                    continue;
+                }
+
+                if (
+                    field ==
+                    2
+                )
+                {
+                    if (
+                        wire !=
+                        0
+                    )
+                    {
+                        throw new InvalidOperationException(
+                            "10014.signout_attempt: invalid wire type"
+                        );
+                    }
+
+                    signoutAttempt =
+                        ReadUInt32(
+                            payload,
+                            ref outerOffset,
+                            "10014.signout_attempt"
+                        );
+
+                    continue;
+                }
+
+                if (
+                    field ==
+                    3
+                )
+                {
+                    if (
+                        wire !=
+                        0
+                    )
+                    {
+                        throw new InvalidOperationException(
+                            "10014.lobby_id: invalid wire type"
+                        );
+                    }
+
+                    lobbyId =
+                        ReadVarUInt64(
+                            payload,
+                            ref outerOffset,
+                            "10014.lobby_id"
+                        );
+
+                    hasLobbyId =
+                        true;
+
+                    continue;
+                }
+
+                if (
+                    field ==
+                    4
+                )
+                {
+                    if (
+                        wire !=
+                        0
+                    )
+                    {
+                        throw new InvalidOperationException(
+                            "10014.match_id: invalid wire type"
+                        );
+                    }
+
+                    matchId =
+                        ReadVarUInt64(
+                            payload,
+                            ref outerOffset,
+                            "10014.match_id"
+                        );
+
+                    hasMatchId =
+                        true;
+
+                    continue;
+                }
+
+                if (
+                    field ==
+                    9
+                )
+                {
+                    if (
+                        wire !=
+                        0
+                    )
+                    {
+                        throw new InvalidOperationException(
+                            "10014.cluster_id: invalid wire type"
+                        );
+                    }
+
+                    clusterId =
+                        ReadUInt32(
+                            payload,
+                            ref outerOffset,
+                            "10014.cluster_id"
+                        );
+
+                    continue;
+                }
+
+                if (
+                    field ==
+                    10
+                )
+                {
+                    if (
+                        wire !=
+                        2
+                    )
+                    {
+                        throw new InvalidOperationException(
+                            "10014.match_data: invalid wire type"
+                        );
+                    }
+
+                    matchData =
+                        ReadBytes(
+                            payload,
+                            ref outerOffset,
+                            "10014.match_data"
+                        );
+
+                    hasMatchData =
+                        true;
+
+                    continue;
+                }
+
+                SkipField(
+                    payload,
+                    ref outerOffset,
+                    wire,
+                    "10014.outer.unknown." +
+                    field
+                );
+            }
+
+            if (
+                !hasLobbyId ||
+                lobbyId ==
+                    0
+            )
+            {
+                throw new InvalidOperationException(
+                    "10014: missing lobby_id"
+                );
+            }
+
+            var reservationProvider =
+                DeadlockGcRuntimeServices
+                    .DedicatedServerSnapshot;
+
+            if (
+                reservationProvider ==
+                null
+            )
+            {
+                throw new InvalidOperationException(
+                    "10014: DedicatedServerSnapshot provider missing"
+                );
+            }
+
+            var reservation =
+                reservationProvider(
+                    lobbyId
+                );
+
+            if (
+                !reservation.Found
+            )
+            {
+                throw new InvalidOperationException(
+                    "10014: reservation not found for lobby " +
+                    lobbyId
+                );
+            }
+
+            if (
+                reservation.GameServerSteamId !=
+                _context.SteamId
+            )
+            {
+                throw new InvalidOperationException(
+                    "10014: dedicated ownership mismatch"
+                );
+            }
+
+            if (
+                !hasMatchData
+            )
+            {
+                throw new InvalidOperationException(
+                    "10014: match_data missing"
+                );
+            }
+
+            uint matchDurationS =
+                0;
+
+            uint endReason =
+                0;
+
+            uint winningTeam =
+                0;
+
+            uint objectivesMaskLegacy =
+                0;
+
+            uint serverVersion =
+                0;
+
+            uint gameMode =
+                0;
+
+            uint matchMode =
+                0;
+
+            ulong objectivesMaskTeam0 =
+                0;
+
+            ulong objectivesMaskTeam1 =
+                0;
+
+            uint matchEndTime =
+                0;
+
+            float stompScore =
+                0;
+
+            var safeToAbandon =
+                false;
+
+            var teamAbandon =
+                false;
+
+            var newPlayerPool =
+                false;
+
+            var lowPriPool =
+                false;
+
+            var notScored =
+                false;
+
+            var hasNotScored =
+                false;
+
+            var hasGameMode =
+                false;
+
+            var hasMatchMode =
+                false;
+
+            var hasWinningTeam =
+                false;
+
+            var forgiveExistingAbandons =
+                false;
+
+            uint brawlAvgRoundTimeS =
+                0;
+
+            uint rankType =
+                0;
+
+            uint rankInterval =
+                0;
+
+            float winnerPctTimeInEnemy =
+                0;
+
+            var teamScores =
+                new List<uint>();
+
+            var teamInfoCount =
+                0;
+
+            var matchTrackedStatsCount =
+                0;
+
+            var playerLogs =
+                new List<string>();
+
+            var playerDamageLogs =
+                new List<string>();
+
+            var postMatchPlayers =
+                new List<DeadlockPostMatchPlayer>();
+
+            var matchOffset =
+                0;
+
+            while (
+                matchOffset <
+                matchData.Length
+            )
+            {
+                var key =
+                    ReadVarUInt64(
+                        matchData,
+                        ref matchOffset,
+                        "match.key"
+                    );
+
+                var field =
+                    unchecked(
+                        (int)(
+                            key >>
+                            3
+                        )
+                    );
+
+                var wire =
+                    unchecked(
+                        (int)(
+                            key &
+                            7
+                        )
+                    );
+
+                if (
+                    field <=
+                    0
+                )
+                {
+                    throw new InvalidOperationException(
+                        "match: invalid field number"
+                    );
+                }
+
+                if (
+                    field ==
+                    4
+                )
+                {
+                    if (
+                        wire !=
+                        2
+                    )
+                    {
+                        throw new InvalidOperationException(
+                            "match.players: invalid wire type"
+                        );
+                    }
+
+                    var playerPayload =
+                        ReadBytes(
+                            matchData,
+                            ref matchOffset,
+                            "match.players"
+                        );
+
+                    uint accountId = 0;
+                    uint team = 0;
+                    uint playerSlot = 0;
+                    uint heroId = 0;
+                    uint kills = 0;
+                    uint deaths = 0;
+                    uint netWorth = 0;
+                    uint assists = 0;
+                    uint gpmEnd = 0;
+                    uint lastHits = 0;
+                    uint denies = 0;
+                    uint abilityPoints = 0;
+                    uint level = 0;
+                    uint assignedLane = 0;
+                    uint partyIndex = 0;
+                    uint platform = 0;
+                    uint abilityDamage = 0;
+                    uint bulletDamage = 0;
+                    uint playerHealing = 0;
+                    uint timeDeadS = 0;
+                    uint playerBulletDamage = 0;
+                    uint playerAbilityDamage = 0;
+                    uint playerMeleeDamage = 0;
+                    uint abandonMatchTimeS = 0;
+                    uint abandonTimeStamp = 0;
+                    uint objectiveDamage = 0;
+                    float avgTimeToKillS = 0;
+                    bool requiresSkillCalibration = false;
+                    uint playerBarriering = 0;
+                    uint teammateHealing = 0;
+                    uint teammateBarriering = 0;
+                    uint selfDamage = 0;
+                    uint matchNumber = 0;
+                    uint playerMatchOutcome = 0;
+                    int rankChangeDelta = 0;
+
+                    var itemIds =
+                        new List<uint>();
+
+                    var playerOffset =
+                        0;
+
+                    while (
+                        playerOffset <
+                        playerPayload.Length
+                    )
+                    {
+                        var playerKey =
+                            ReadVarUInt64(
+                                playerPayload,
+                                ref playerOffset,
+                                "player.key"
+                            );
+
+                        var playerField =
+                            unchecked(
+                                (int)(
+                                    playerKey >>
+                                    3
+                                )
+                            );
+
+                        var playerWire =
+                            unchecked(
+                                (int)(
+                                    playerKey &
+                                    7
+                                )
+                            );
+
+                        if (
+                            playerField <=
+                            0
+                        )
+                        {
+                            throw new InvalidOperationException(
+                                "player: invalid field number"
+                            );
+                        }
+
+                        if (
+                            playerField ==
+                            13
+                        )
+                        {
+                            if (
+                                playerWire !=
+                                2
+                            )
+                            {
+                                throw new InvalidOperationException(
+                                    "player.items: invalid wire type"
+                                );
+                            }
+
+                            var itemId =
+                                ParsePlayerItemId(
+                                    ReadBytes(
+                                        playerPayload,
+                                        ref playerOffset,
+                                        "player.items"
+                                    )
+                                );
+
+                            if (
+                                itemId >
+                                0
+                            )
+                            {
+                                itemIds.Add(
+                                    itemId
+                                );
+                            }
+
+                            continue;
+                        }
+
+                        if (
+                            playerField ==
+                            47
+                        )
+                        {
+                            if (
+                                playerWire !=
+                                5
+                            )
+                            {
+                                throw new InvalidOperationException(
+                                    "player.avg_time_to_kill_s: invalid wire type"
+                                );
+                            }
+
+                            avgTimeToKillS =
+                                ReadFloat32(
+                                    playerPayload,
+                                    ref playerOffset,
+                                    "player.avg_time_to_kill_s"
+                                );
+
+                            continue;
+                        }
+
+                        var isKnownVarint =
+                            playerField ==
+                                1 ||
+                            playerField ==
+                                2 ||
+                            playerField ==
+                                3 ||
+                            playerField ==
+                                7 ||
+                            playerField ==
+                                8 ||
+                            playerField ==
+                                9 ||
+                            playerField ==
+                                10 ||
+                            playerField ==
+                                11 ||
+                            playerField ==
+                                20 ||
+                            playerField ==
+                                21 ||
+                            playerField ==
+                                22 ||
+                            playerField ==
+                                23 ||
+                            playerField ==
+                                24 ||
+                            playerField ==
+                                25 ||
+                            playerField ==
+                                26 ||
+                            playerField ==
+                                27 ||
+                            playerField ==
+                                28 ||
+                            playerField ==
+                                29 ||
+                            playerField ==
+                                32 ||
+                            playerField ==
+                                37 ||
+                            playerField ==
+                                38 ||
+                            playerField ==
+                                39 ||
+                            playerField ==
+                                40 ||
+                            playerField ==
+                                41 ||
+                            playerField ==
+                                42 ||
+                            playerField ==
+                                46 ||
+                            playerField ==
+                                48 ||
+                            playerField ==
+                                49 ||
+                            playerField ==
+                                50 ||
+                            playerField ==
+                                51 ||
+                            playerField ==
+                                52 ||
+                            playerField ==
+                                53 ||
+                            playerField ==
+                                61 ||
+                            playerField ==
+                                62;
+
+                        if (
+                            isKnownVarint
+                        )
+                        {
+                            if (
+                                playerWire !=
+                                0
+                            )
+                            {
+                                throw new InvalidOperationException(
+                                    "player." +
+                                    playerField +
+                                    ": invalid wire type"
+                                );
+                            }
+
+                            if (
+                                playerField ==
+                                62
+                            )
+                            {
+                                rankChangeDelta =
+                                    ReadInt32(
+                                        playerPayload,
+                                        ref playerOffset,
+                                        "player.rank_change_delta"
+                                    );
+
+                                continue;
+                            }
+
+                            var value =
+                                ReadUInt32(
+                                    playerPayload,
+                                    ref playerOffset,
+                                    "player." +
+                                    playerField
+                                );
+
+                            switch (
+                                playerField
+                            )
+                            {
+                                case 1:
+                                    accountId = value;
+                                    break;
+
+                                case 2:
+                                    team = value;
+                                    break;
+
+                                case 3:
+                                    playerSlot = value;
+                                    break;
+
+                                case 7:
+                                    heroId = value;
+                                    break;
+
+                                case 8:
+                                    kills = value;
+                                    break;
+
+                                case 9:
+                                    deaths = value;
+                                    break;
+
+                                case 10:
+                                    netWorth = value;
+                                    break;
+
+                                case 11:
+                                    assists = value;
+                                    break;
+
+                                case 20:
+                                    gpmEnd = value;
+                                    break;
+
+                                case 21:
+                                    lastHits = value;
+                                    break;
+
+                                case 22:
+                                    denies = value;
+                                    break;
+
+                                case 23:
+                                    abilityPoints = value;
+                                    break;
+
+                                case 24:
+                                    level = value;
+                                    break;
+
+                                case 25:
+                                    assignedLane = value;
+                                    break;
+
+                                case 26:
+                                    partyIndex = value;
+                                    break;
+
+                                case 27:
+                                    platform = value;
+                                    break;
+
+                                case 28:
+                                    abilityDamage = value;
+                                    break;
+
+                                case 29:
+                                    bulletDamage = value;
+                                    break;
+
+                                case 32:
+                                    playerHealing = value;
+                                    break;
+
+                                case 37:
+                                    timeDeadS = value;
+                                    break;
+
+                                case 38:
+                                    playerBulletDamage = value;
+                                    break;
+
+                                case 39:
+                                    playerAbilityDamage = value;
+                                    break;
+
+                                case 40:
+                                    playerMeleeDamage = value;
+                                    break;
+
+                                case 41:
+                                    abandonMatchTimeS = value;
+                                    break;
+
+                                case 42:
+                                    abandonTimeStamp = value;
+                                    break;
+
+                                case 46:
+                                    objectiveDamage = value;
+                                    break;
+
+                                case 48:
+                                    requiresSkillCalibration =
+                                        value !=
+                                        0;
+                                    break;
+
+                                case 49:
+                                    playerBarriering = value;
+                                    break;
+
+                                case 50:
+                                    teammateHealing = value;
+                                    break;
+
+                                case 51:
+                                    teammateBarriering = value;
+                                    break;
+
+                                case 52:
+                                    selfDamage = value;
+                                    break;
+
+                                case 53:
+                                    matchNumber = value;
+                                    break;
+
+                                case 61:
+                                    playerMatchOutcome = value;
+                                    break;
+                            }
+
+                            continue;
+                        }
+
+                        SkipField(
+                            playerPayload,
+                            ref playerOffset,
+                            playerWire,
+                            "player.unknown." +
+                            playerField
+                        );
+                    }
+
+                    playerLogs.Add(
+                        "account=" +
+                        accountId +
+                        " hero=" +
+                        heroId +
+                        " team=" +
+                        team +
+                        "(" +
+                        TeamName(
+                            team
+                        ) +
+                        ")" +
+                        " slot=" +
+                        playerSlot +
+                        " K/D/A=" +
+                        kills +
+                        "/" +
+                        deaths +
+                        "/" +
+                        assists +
+                        " net_worth=" +
+                        netWorth +
+                        " gpm_end=" +
+                        gpmEnd +
+                        " LH=" +
+                        lastHits +
+                        " denies=" +
+                        denies +
+                        " level=" +
+                        level +
+                        " ability_points=" +
+                        abilityPoints +
+                        " lane=" +
+                        assignedLane +
+                        " party_index=" +
+                        partyIndex +
+                        " platform=" +
+                        platform +
+                        " items=[" +
+                        string.Join(
+                            ",",
+                            itemIds
+                        ) +
+                        "]" +
+                        " outcome=" +
+                        playerMatchOutcome +
+                        "(" +
+                        OutcomeName(
+                            playerMatchOutcome
+                        ) +
+                        ")" +
+                        " rank_delta=" +
+                        rankChangeDelta +
+                        " match_number=" +
+                        matchNumber +
+                        " skill_calibration=" +
+                        requiresSkillCalibration
+                    );
+
+                    playerDamageLogs.Add(
+                        "account=" +
+                        accountId +
+                        " ability_damage=" +
+                        abilityDamage +
+                        " bullet_damage=" +
+                        bulletDamage +
+                        " player_bullet_damage=" +
+                        playerBulletDamage +
+                        " player_ability_damage=" +
+                        playerAbilityDamage +
+                        " melee_damage=" +
+                        playerMeleeDamage +
+                        " healing=" +
+                        playerHealing +
+                        " barriering=" +
+                        playerBarriering +
+                        " teammate_healing=" +
+                        teammateHealing +
+                        " teammate_barriering=" +
+                        teammateBarriering +
+                        " self_damage=" +
+                        selfDamage +
+                        " objective_damage=" +
+                        objectiveDamage +
+                        " time_dead_s=" +
+                        timeDeadS +
+                        " avg_ttk_s=" +
+                        avgTimeToKillS +
+                        " abandon_match_time_s=" +
+                        abandonMatchTimeS +
+                        " abandon_timestamp=" +
+                        abandonTimeStamp
+                    );
+
+                    if (
+                        accountId >
+                            0 &&
+                        heroId >
+                            0
+                    )
+                    {
+                        postMatchPlayers.Add(
+                            new DeadlockPostMatchPlayer(
+                                accountId,
+                                heroId,
+                                playerMatchOutcome
+                            )
+                        );
+                    }
+
+                    continue;
+                }
+
+                if (
+                    field ==
+                    12
+                )
+                {
+                    if (
+                        wire !=
+                        5
+                    )
+                    {
+                        throw new InvalidOperationException(
+                            "match.stomp_score: invalid wire type"
+                        );
+                    }
+
+                    stompScore =
+                        ReadFloat32(
+                            matchData,
+                            ref matchOffset,
+                            "match.stomp_score"
+                        );
+
+                    continue;
+                }
+
+                if (
+                    field ==
+                    21
+                )
+                {
+                    if (
+                        wire !=
+                        5
+                    )
+                    {
+                        throw new InvalidOperationException(
+                            "match.winner_pct_time_in_enemy: invalid wire type"
+                        );
+                    }
+
+                    winnerPctTimeInEnemy =
+                        ReadFloat32(
+                            matchData,
+                            ref matchOffset,
+                            "match.winner_pct_time_in_enemy"
+                        );
+
+                    continue;
+                }
+
+                if (
+                    field ==
+                    18
+                )
+                {
+                    if (
+                        wire ==
+                        0
+                    )
+                    {
+                        teamScores.Add(
+                            ReadUInt32(
+                                matchData,
+                                ref matchOffset,
+                                "match.team_score"
+                            )
+                        );
+
+                        continue;
+                    }
+
+                    if (
+                        wire ==
+                        2
+                    )
+                    {
+                        var packed =
+                            ReadBytes(
+                                matchData,
+                                ref matchOffset,
+                                "match.team_score.packed"
+                            );
+
+                        var packedOffset =
+                            0;
+
+                        while (
+                            packedOffset <
+                            packed.Length
+                        )
+                        {
+                            teamScores.Add(
+                                ReadUInt32(
+                                    packed,
+                                    ref packedOffset,
+                                    "match.team_score.packed.value"
+                                )
+                            );
+                        }
+
+                        continue;
+                    }
+
+                    throw new InvalidOperationException(
+                        "match.team_score: invalid wire type"
+                    );
+                }
+
+                if (
+                    field ==
+                    19
+                )
+                {
+                    if (
+                        wire !=
+                        2
+                    )
+                    {
+                        throw new InvalidOperationException(
+                            "match.teams: invalid wire type"
+                        );
+                    }
+
+                    ReadBytes(
+                        matchData,
+                        ref matchOffset,
+                        "match.teams"
+                    );
+
+                    teamInfoCount++;
+
+                    continue;
+                }
+
+                if (
+                    field ==
+                    20
+                )
+                {
+                    if (
+                        wire !=
+                        2
+                    )
+                    {
+                        throw new InvalidOperationException(
+                            "match.match_tracked_stats: invalid wire type"
+                        );
+                    }
+
+                    ReadBytes(
+                        matchData,
+                        ref matchOffset,
+                        "match.match_tracked_stats"
+                    );
+
+                    matchTrackedStatsCount++;
+
+                    continue;
+                }
+
+                var knownMatchVarint =
+                    field ==
+                        1 ||
+                    field ==
+                        2 ||
+                    field ==
+                        3 ||
+                    field ==
+                        5 ||
+                    field ==
+                        6 ||
+                    field ==
+                        7 ||
+                    field ==
+                        8 ||
+                    field ==
+                        9 ||
+                    field ==
+                        10 ||
+                    field ==
+                        11 ||
+                    field ==
+                        13 ||
+                    field ==
+                        14 ||
+                    field ==
+                        15 ||
+                    field ==
+                        16 ||
+                    field ==
+                        17 ||
+                    field ==
+                        22 ||
+                    field ==
+                        23 ||
+                    field ==
+                        25 ||
+                    field ==
+                        26;
+
+                if (
+                    knownMatchVarint
+                )
+                {
+                    if (
+                        wire !=
+                        0
+                    )
+                    {
+                        throw new InvalidOperationException(
+                            "match." +
+                            field +
+                            ": invalid wire type"
+                        );
+                    }
+
+                    if (
+                        field ==
+                        9
+                    )
+                    {
+                        objectivesMaskTeam0 =
+                            ReadVarUInt64(
+                                matchData,
+                                ref matchOffset,
+                                "match.objectives_mask_team0"
+                            );
+
+                        continue;
+                    }
+
+                    if (
+                        field ==
+                        10
+                    )
+                    {
+                        objectivesMaskTeam1 =
+                            ReadVarUInt64(
+                                matchData,
+                                ref matchOffset,
+                                "match.objectives_mask_team1"
+                            );
+
+                        continue;
+                    }
+
+                    var value =
+                        ReadUInt32(
+                            matchData,
+                            ref matchOffset,
+                            "match." +
+                            field
+                        );
+
+                    switch (
+                        field
+                    )
+                    {
+                        case 1:
+                            matchDurationS = value;
+                            break;
+
+                        case 2:
+                            endReason = value;
+                            break;
+
+                        case 3:
+                            winningTeam = value;
+                            hasWinningTeam = true;
+                            break;
+
+                        case 5:
+                            objectivesMaskLegacy = value;
+                            break;
+
+                        case 6:
+                            serverVersion = value;
+                            break;
+
+                        case 7:
+                            gameMode = value;
+                            hasGameMode = true;
+                            break;
+
+                        case 8:
+                            matchMode = value;
+                            hasMatchMode = true;
+                            break;
+
+                        case 11:
+                            matchEndTime = value;
+                            break;
+
+                        case 13:
+                            safeToAbandon =
+                                value !=
+                                0;
+                            break;
+
+                        case 14:
+                            teamAbandon =
+                                value !=
+                                0;
+                            break;
+
+                        case 15:
+                            newPlayerPool =
+                                value !=
+                                0;
+                            break;
+
+                        case 16:
+                            lowPriPool =
+                                value !=
+                                0;
+                            break;
+
+                        case 17:
+                            notScored =
+                                value !=
+                                0;
+
+                            hasNotScored =
+                                true;
+                            break;
+
+                        case 22:
+                            forgiveExistingAbandons =
+                                value !=
+                                0;
+                            break;
+
+                        case 23:
+                            brawlAvgRoundTimeS = value;
+                            break;
+
+                        case 25:
+                            rankType = value;
+                            break;
+
+                        case 26:
+                            rankInterval = value;
+                            break;
+                    }
+
+                    continue;
+                }
+
+                SkipField(
+                    matchData,
+                    ref matchOffset,
+                    wire,
+                    "match.unknown." +
+                    field
+                );
+            }
+
+            _logger.LogInformation(
+                "[10014-V2] OUTER steam={SteamId} payload_bytes={PayloadBytes} lobby_id={LobbyId} match_id={MatchId} match_id_present={MatchIdPresent} signout_attempt={Attempt} cluster_id={ClusterId} additional_data={AdditionalCount}",
+                _context.SteamId,
+                payload.Length,
+                lobbyId,
+                matchId,
+                hasMatchId,
+                signoutAttempt,
+                clusterId,
+                extras.Count
+            );
+
+            _logger.LogInformation(
+                "[10014-V2] MATCH duration_s={Duration} end_reason={EndReason}({EndReasonName}) winning_team={Winner}({WinnerName}) winner_present={WinnerPresent} game_mode={GameMode}({GameModeName}) game_mode_present={GameModePresent} match_mode={MatchMode}({MatchModeName}) match_mode_present={MatchModePresent} players={Players}",
+                matchDurationS,
+                endReason,
+                EndReasonName(
+                    endReason
+                ),
+                winningTeam,
+                TeamName(
+                    winningTeam
+                ),
+                hasWinningTeam,
+                gameMode,
+                GameModeName(
+                    gameMode
+                ),
+                hasGameMode,
+                matchMode,
+                MatchModeName(
+                    matchMode
+                ),
+                hasMatchMode,
+                playerLogs.Count
+            );
+
+            _logger.LogInformation(
+                "[10014-V2] FLAGS not_scored_present={NotScoredPresent} not_scored={NotScored} safe_to_abandon={SafeToAbandon} team_abandon={TeamAbandon} new_player_pool={NewPlayerPool} low_pri_pool={LowPriPool} forgive_existing_abandons={ForgiveExistingAbandons}",
+                hasNotScored,
+                notScored,
+                safeToAbandon,
+                teamAbandon,
+                newPlayerPool,
+                lowPriPool,
+                forgiveExistingAbandons
+            );
+
+            _logger.LogInformation(
+                "[10014-V2] MISC server_version={ServerVersion} match_end_time={MatchEndTime} stomp_score={StompScore} winner_pct_time_in_enemy={WinnerPct} objectives_legacy={ObjectivesLegacy} objectives_team0={Objectives0} objectives_team1={Objectives1} team_scores=[{TeamScores}] teams={Teams} match_tracked_stats={TrackedStats} rank_type={RankType} rank_interval={RankInterval} brawl_avg_round_time_s={BrawlAvg}",
+                serverVersion,
+                matchEndTime,
+                stompScore,
+                winnerPctTimeInEnemy,
+                objectivesMaskLegacy,
+                objectivesMaskTeam0,
+                objectivesMaskTeam1,
+                string.Join(
+                    ",",
+                    teamScores
+                ),
+                teamInfoCount,
+                matchTrackedStatsCount,
+                rankType,
+                rankInterval,
+                brawlAvgRoundTimeS
+            );
+
+            _logger.LogInformation(
+                "[10014-V2] CLASSIFY match_mode={MatchMode}({MatchModeName}) private={Private} ranked={Ranked} local_policy={Policy}",
+                matchMode,
+                MatchModeName(
+                    matchMode
+                ),
+                matchMode ==
+                    2,
+                matchMode ==
+                    4,
+                LocalPersistencePolicy(
+                    matchMode
+                )
+            );
+
+            for (
+                var index = 0;
+                index < extras.Count;
+                index++
+            )
+            {
+                var extra =
+                    extras[
+                        index
+                    ];
+
+                _logger.LogInformation(
+                    "[10014-V2-EXTRA] index={Index} type={Type}({TypeName}) bytes={Bytes} msg_key={MsgKey} compressed={Compressed}",
+                    index,
+                    extra.MsgType,
+                    ExtraTypeName(
+                        extra.MsgType
+                    ),
+                    extra.Contents.Length,
+                    extra.MsgKey,
+                    extra.Compressed
+                );
+            }
+
+            var accountStatChanges =
+                new List<(
+                    uint AccountId,
+                    uint HeroId,
+                    uint StatId,
+                    uint Value,
+                    uint Medal
+                )>();
+
+            foreach (
+                var extra in
+                extras
+            )
+            {
+                if (
+                    extra.MsgType !=
+                        3 ||
+                    extra.Compressed
+                )
+                {
+                    continue;
+                }
+
+                try
+                {
+                    ParseAccountStatChanges(
+                        extra.Contents,
+                        accountStatChanges
+                    );
+                }
+                catch (
+                    Exception ex
+                )
+                {
+                    _logger.LogWarning(
+                        ex,
+                        "[10014-V2-STAT] could not decode AccountStatChanges payload; lifecycle is unaffected"
+                    );
+                }
+            }
+
+            _logger.LogInformation(
+                "[10014-V2-STAT] decoded_changes={Count}",
+                accountStatChanges.Count
+            );
+
+            for (
+                var index = 0;
+                index < accountStatChanges.Count;
+                index++
+            )
+            {
+                var stat =
+                    accountStatChanges[
+                        index
+                    ];
+
+                _logger.LogInformation(
+                    "[10014-V2-STAT] index={Index} account_id={AccountId} hero_id={HeroId} stat_id={StatId} value={Value} medal={Medal}",
+                    index,
+                    stat.AccountId,
+                    stat.HeroId,
+                    stat.StatId,
+                    stat.Value,
+                    stat.Medal
+                );
+            }
+
+            for (
+                var index = 0;
+                index < playerLogs.Count;
+                index++
+            )
+            {
+                _logger.LogInformation(
+                    "[10014-V2-PLAYER] index={Index} {Summary}",
+                    index,
+                    playerLogs[
+                        index
+                    ]
+                );
+
+                _logger.LogInformation(
+                    "[10014-V2-DAMAGE] index={Index} {Summary}",
+                    index,
+                    playerDamageLogs[
+                        index
+                    ]
+                );
+            }
+
+            _deadlockPostMatchResult =
+                new DeadlockPostMatchResult(
+                    lobbyId,
+                    hasMatchId
+                        ? matchId
+                        : lobbyId,
+                    matchMode,
+                    postMatchPlayers
+                );
+
+            _logger.LogInformation(
+                "[10014-V2] COMPLETE lobby_id={LobbyId} match_id={MatchId} read_only=True ephemeral_players={Players}",
+                lobbyId,
+                matchId,
+                postMatchPlayers.Count
+            );
+
+            return TsValue.FromBool(
+                true
+            );
+        }
+        catch (
+            Exception ex
+        )
+        {
+            /*
+             * CRITICAL:
+             *
+             * Decoder diagnostics must NEVER break the already-proven
+             * 10014 -> 10015 -> 35000ms release lifecycle.
+             */
+            _deadlockPostMatchResult =
+                null;
+
+            _logger.LogWarning(
+                ex,
+                "[10014-V2] decoder failed for SteamID {SteamId}; continuing signout lifecycle",
+                _context.SteamId
+            );
+
+            return TsValue.FromBool(
+                false
+            );
+        }
+    }
+
+
+    // SKYNET_DEADLOCK_POSTMATCH_ANALYTICS_EPHEMERAL_V1_HOST
+    // Sends the official account refresh after lobby unsubscribe.
+    // This method reads existing hero values and performs no DB writes.
+    public TsValue DeadlockQueueCurrentPostMatchAnalytics()
+    {
+        static byte[] SerializeProto<T>(T value)
+        {
+            using var stream =
+                new MemoryStream();
+
+            ProtoBuf.Serializer.Serialize(
+                stream,
+                value
+            );
+
+            return stream.ToArray();
+        }
+
+        static uint ReadUInt32(
+            JsonElement element,
+            string name)
+        {
+            if (
+                element.ValueKind !=
+                    JsonValueKind.Object ||
+                !element.TryGetProperty(
+                    name,
+                    out var property
+                )
+            )
+            {
+                return 0;
+            }
+
+            if (
+                property.ValueKind ==
+                    JsonValueKind.Number &&
+                property.TryGetUInt32(
+                    out var number
+                )
+            )
+            {
+                return number;
+            }
+
+            if (
+                property.ValueKind ==
+                    JsonValueKind.String &&
+                uint.TryParse(
+                    property.GetString(),
+                    out var text
+                )
+            )
+            {
+                return text;
+            }
+
+            return 0;
+        }
+
+        if (
+            _request.MessageType !=
+                10014 ||
+            _deadlockPostMatchResult ==
+                null
+        )
+        {
+            _logger.LogWarning(
+                "[POSTMATCH-ANALYTICS] skipped: no decoded ephemeral result"
+            );
+
+            return TsValue.FromBool(
+                false
+            );
+        }
+
+        var queue =
+            DotaGcRuntimeServices
+                .PendingMessageQueued;
+
+        if (
+            queue ==
+                null
+        )
+        {
+            _logger.LogWarning(
+                "[POSTMATCH-ANALYTICS] skipped: client queue unavailable"
+            );
+
+            return TsValue.FromBool(
+                false
+            );
+        }
+
+        var result =
+            _deadlockPostMatchResult;
+
+        const ulong SteamIdIndividualBase =
+            76561197960265728UL;
+
+        var uniquePlayers =
+            new HashSet<(
+                uint AccountId,
+                uint HeroId
+            )>();
+
+        var targets =
+            0;
+
+        foreach (
+            var player in
+            result.Players
+        )
+        {
+            if (
+                !uniquePlayers.Add(
+                    (
+                        player.AccountId,
+                        player.HeroId
+                    )
+                )
+            )
+            {
+                continue;
+            }
+
+            uint wins = 0;
+            uint heroXp = 0;
+            uint brawlWins = 0;
+
+            try
+            {
+                var heroJson =
+                    DeadlockGcRuntimeServices
+                        .HeroStatsJsonProvider?
+                        .Invoke(
+                            player.AccountId
+                        ) ??
+                    "[]";
+
+                using var heroDocument =
+                    JsonDocument.Parse(
+                        string.IsNullOrWhiteSpace(
+                            heroJson
+                        )
+                            ? "[]"
+                            : heroJson
+                    );
+
+                if (
+                    heroDocument.RootElement.ValueKind ==
+                        JsonValueKind.Array
+                )
+                {
+                    foreach (
+                        var hero in
+                        heroDocument.RootElement.EnumerateArray()
+                    )
+                    {
+                        if (
+                            ReadUInt32(
+                                hero,
+                                "heroId"
+                            ) !=
+                            player.HeroId
+                        )
+                        {
+                            continue;
+                        }
+
+                        wins =
+                            ReadUInt32(
+                                hero,
+                                "wins"
+                            );
+
+                        heroXp =
+                            ReadUInt32(
+                                hero,
+                                "heroXp"
+                            );
+
+                        brawlWins =
+                            ReadUInt32(
+                                hero,
+                                "brawlWins"
+                            );
+
+                        break;
+                    }
+                }
+            }
+            catch (
+                Exception ex
+            )
+            {
+                _logger.LogWarning(
+                    ex,
+                    "[POSTMATCH-ANALYTICS] hero read failed account_id={AccountId} hero_id={HeroId}; sending zero snapshot",
+                    player.AccountId,
+                    player.HeroId
+                );
+            }
+
+            var heroInfo =
+                new SKYNET.Server.GameCoordinator.Citadel.CSOAccountHeroInfo
+                {
+                    AccountId =
+                        player.AccountId,
+
+                    HeroId =
+                        player.HeroId,
+
+                    Status =
+                        SKYNET.Server.GameCoordinator.Citadel.CSOAccountHeroInfo.EHeroStatus.keLocked,
+
+                    Wins =
+                        wins,
+
+                    HeroXp =
+                        heroXp,
+
+                    BrawlWins =
+                        brawlWins
+                };
+
+            var targetSteamId =
+                SteamIdIndividualBase +
+                player.AccountId;
+
+            var update =
+                new CMsgSOMultipleObjects
+                {
+                    Version =
+                        result.MatchId,
+
+                    OwnerSoid =
+                        new CMsgSOIDOwner
+                        {
+                            Type =
+                                1,
+
+                            Id =
+                                targetSteamId
+                        },
+
+                    ServiceId =
+                        1
+                };
+
+            update.ObjectsModifieds.Add(
+                new CMsgSOMultipleObjects.SingleObject
+                {
+                    TypeId =
+                        107,
+
+                    ObjectData =
+                        SerializeProto(
+                            heroInfo
+                        )
+                }
+            );
+
+            queue.Invoke(
+                targetSteamId,
+                new ApiGCMessage
+                {
+                    AppId =
+                        _context.AppId,
+
+                    MessageType =
+                        26,
+
+                    PayloadBase64 =
+                        Convert.ToBase64String(
+                            SerializeProto(
+                                update
+                            )
+                        ),
+
+                    Protobuf =
+                        true
+                }
+            );
+
+            // 9166 has an enum ID but no declared message body.
+            queue.Invoke(
+                targetSteamId,
+                new ApiGCMessage
+                {
+                    AppId =
+                        _context.AppId,
+
+                    MessageType =
+                        9166,
+
+                    PayloadBase64 =
+                        string.Empty,
+
+                    Protobuf =
+                        true
+                }
+            );
+
+            targets++;
+
+            _logger.LogInformation(
+                "[POSTMATCH-ANALYTICS] account_id={AccountId} hero_id={HeroId} outcome={Outcome} type107 wins={Wins} hero_xp={HeroXp} brawl_wins={BrawlWins} queue9166=empty",
+                player.AccountId,
+                player.HeroId,
+                player.Outcome,
+                wins,
+                heroXp,
+                brawlWins
+            );
+        }
+
+        _deadlockPostMatchResult =
+            null;
+
+        _logger.LogInformation(
+            "[POSTMATCH-ANALYTICS] COMPLETE lobby_id={LobbyId} match_id={MatchId} match_mode={MatchMode} targets={Targets} persistence=none order=26(type107)->9166(empty)",
+            result.LobbyId,
+            result.MatchId,
+            result.MatchMode,
+            targets
+        );
+
+        return TsValue.FromBool(
+            targets >
+                0
+        );
+    }
+
+
+    // SKYNET_DEADLOCK_REAL_10014_DECODER_V1_HOST
+    //
+    // READ ONLY protobuf inspection of:
+    //
+    //   CMsgServerToGCMatchSignout (10014)
+    //
+    // No DB/state mutation is performed here.
+    //
+    public TsValue DeadlockInspectCurrentMatchSignout()
+    {
+        static bool TryReadVarUInt64(
+            byte[] data,
+            ref int offset,
+            out ulong value)
+        {
+            value =
+                0;
+
+            for (
+                var index = 0;
+                index < 10;
+                index++
+            )
+            {
+                if (
+                    offset >=
+                    data.Length
+                )
+                {
+                    return false;
+                }
+
+                var current =
+                    data[
+                        offset++
+                    ];
+
+                var low =
+                    unchecked(
+                        (ulong)(
+                            current &
+                            0x7f
+                        )
+                    );
+
+                if (
+                    index ==
+                        9 &&
+                    low >
+                        1
+                )
+                {
+                    return false;
+                }
+
+                value |=
+                    low <<
+                    (
+                        index *
+                        7
+                    );
+
+                if (
+                    (
+                        current &
+                        0x80
+                    ) ==
+                    0
+                )
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        static bool TryReadLengthDelimited(
+            byte[] data,
+            ref int offset,
+            out byte[] value)
+        {
+            value =
+                Array.Empty<byte>();
+
+            if (
+                !TryReadVarUInt64(
+                    data,
+                    ref offset,
+                    out var rawLength
+                )
+            )
+            {
+                return false;
+            }
+
+            if (
+                rawLength >
+                int.MaxValue
+            )
+            {
+                return false;
+            }
+
+            var length =
+                unchecked(
+                    (int)rawLength
+                );
+
+            if (
+                length <
+                    0 ||
+                offset >
+                    data.Length -
+                    length
+            )
+            {
+                return false;
+            }
+
+            value =
+                new byte[
+                    length
+                ];
+
+            if (
+                length >
+                0
+            )
+            {
+                Buffer.BlockCopy(
+                    data,
+                    offset,
+                    value,
+                    0,
+                    length
+                );
+            }
+
+            offset +=
+                length;
+
+            return true;
+        }
+
+        static bool TrySkipField(
+            byte[] data,
+            ref int offset,
+            int wireType)
+        {
+            switch (
+                wireType
+            )
+            {
+                case 0:
+                {
+                    return TryReadVarUInt64(
+                        data,
+                        ref offset,
+                        out _
+                    );
+                }
+
+                case 1:
+                {
+                    if (
+                        offset >
+                        data.Length -
+                            8
+                    )
+                    {
+                        return false;
+                    }
+
+                    offset +=
+                        8;
+
+                    return true;
+                }
+
+                case 2:
+                {
+                    return TryReadLengthDelimited(
+                        data,
+                        ref offset,
+                        out _
+                    );
+                }
+
+                case 5:
+                {
+                    if (
+                        offset >
+                        data.Length -
+                            4
+                    )
+                    {
+                        return false;
+                    }
+
+                    offset +=
+                        4;
+
+                    return true;
+                }
+
+                default:
+                {
+                    return false;
+                }
+            }
+        }
+
+        static bool TryReadUInt32(
+            ulong raw,
+            out uint value)
+        {
+            if (
+                raw >
+                uint.MaxValue
+            )
+            {
+                value =
+                    0;
+
+                return false;
+            }
+
+            value =
+                unchecked(
+                    (uint)raw
+                );
+
+            return true;
+        }
+
+        static bool TryParsePlayerItem(
+            byte[] payload)
+        {
+            /*
+             * We only need to prove that the nested PlayerItem itself
+             * is well-formed. Individual item properties are not
+             * persisted in this READ-ONLY stage.
+             */
+            var offset =
+                0;
+
+            while (
+                offset <
+                payload.Length
+            )
+            {
+                if (
+                    !TryReadVarUInt64(
+                        payload,
+                        ref offset,
+                        out var key
+                    )
+                )
+                {
+                    return false;
+                }
+
+                var field =
+                    unchecked(
+                        (int)(
+                            key >>
+                            3
+                        )
+                    );
+
+                var wire =
+                    unchecked(
+                        (int)(
+                            key &
+                            7
+                        )
+                    );
+
+                if (
+                    field <=
+                    0
+                )
+                {
+                    return false;
+                }
+
+                if (
+                    !TrySkipField(
+                        payload,
+                        ref offset,
+                        wire
+                    )
+                )
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        var players =
+            new List<(
+                uint AccountId,
+                uint Team,
+                uint PlayerSlot,
+                uint HeroId,
+                uint Kills,
+                uint Deaths,
+                uint NetWorth,
+                uint Assists,
+                uint LastHits,
+                uint Denies,
+                uint AbilityPoints,
+                uint Level,
+                uint AssignedLane,
+                uint PartyIndex,
+                uint Platform,
+                uint AbilityDamage,
+                uint BulletDamage,
+                uint PlayerHealing,
+                uint PlayerBulletDamage,
+                uint PlayerAbilityDamage,
+                uint PlayerMeleeDamage,
+                uint AbandonMatchTimeS,
+                uint AbandonTimeStamp,
+                uint ObjectiveDamage,
+                bool RequiresSkillCalibration,
+                uint MatchNumber,
+                uint PlayerMatchOutcome,
+                int RankChangeDelta,
+                uint ItemCount
+            )>();
+
+        ulong lobbyId =
+            0;
+
+        ulong matchId =
+            0;
+
+        uint signoutAttempt =
+            0;
+
+        uint clusterId =
+            0;
+
+        uint additionalDataCount =
+            0;
+
+        uint matchDurationS =
+            0;
+
+        uint endReason =
+            0;
+
+        uint winningTeam =
+            0;
+
+        uint serverVersion =
+            0;
+
+        uint gameMode =
+            0;
+
+        uint matchMode =
+            0;
+
+        ulong objectivesMaskTeam0 =
+            0;
+
+        ulong objectivesMaskTeam1 =
+            0;
+
+        uint matchEndTime =
+            0;
+
+        var safeToAbandon =
+            false;
+
+        var teamAbandon =
+            false;
+
+        var newPlayerPool =
+            false;
+
+        var lowPriPool =
+            false;
+
+        var notScored =
+            false;
+
+        uint rankType =
+            0;
+
+        uint rankInterval =
+            0;
+
+        var payloadBytes =
+            0;
+
+        byte[] matchData =
+            Array.Empty<byte>();
+
+        var hasLobbyId =
+            false;
+
+        var hasMatchData =
+            false;
+
+        string failureReason =
+            string.Empty;
+
+        TsValue BuildResult(
+            bool accepted,
+            string reason)
+        {
+            var result =
+                new TsObject(
+                    "DeadlockMatchSignoutInspection"
+                );
+
+            result.SetField(
+                "accepted",
+                TsValue.FromBool(
+                    accepted
+                )
+            );
+
+            result.SetField(
+                "reason",
+                TsValue.FromString(
+                    reason ??
+                    string.Empty
+                )
+            );
+
+            result.SetField(
+                "payloadBytes",
+                TsValue.FromInt32(
+                    payloadBytes
+                )
+            );
+
+            result.SetField(
+                "additionalDataCount",
+                TsValue.FromInt32(
+                    unchecked(
+                        (int)additionalDataCount
+                    )
+                )
+            );
+
+            /*
+             * Keep 64-bit identifiers outside JS number space.
+             */
+            result.SetField(
+                "lobbyId",
+                TsValue.FromString(
+                    lobbyId.ToString(
+                        System.Globalization.CultureInfo.InvariantCulture
+                    )
+                )
+            );
+
+            result.SetField(
+                "matchId",
+                TsValue.FromString(
+                    matchId.ToString(
+                        System.Globalization.CultureInfo.InvariantCulture
+                    )
+                )
+            );
+
+            result.SetField(
+                "signoutAttempt",
+                TsValue.FromInt32(
+                    unchecked(
+                        (int)signoutAttempt
+                    )
+                )
+            );
+
+            result.SetField(
+                "clusterId",
+                TsValue.FromInt32(
+                    unchecked(
+                        (int)clusterId
+                    )
+                )
+            );
+
+            result.SetField(
+                "matchDurationS",
+                TsValue.FromInt32(
+                    unchecked(
+                        (int)matchDurationS
+                    )
+                )
+            );
+
+            result.SetField(
+                "endReason",
+                TsValue.FromInt32(
+                    unchecked(
+                        (int)endReason
+                    )
+                )
+            );
+
+            result.SetField(
+                "winningTeam",
+                TsValue.FromInt32(
+                    unchecked(
+                        (int)winningTeam
+                    )
+                )
+            );
+
+            result.SetField(
+                "serverVersion",
+                TsValue.FromInt32(
+                    unchecked(
+                        (int)serverVersion
+                    )
+                )
+            );
+
+            result.SetField(
+                "gameMode",
+                TsValue.FromInt32(
+                    unchecked(
+                        (int)gameMode
+                    )
+                )
+            );
+
+            result.SetField(
+                "matchMode",
+                TsValue.FromInt32(
+                    unchecked(
+                        (int)matchMode
+                    )
+                )
+            );
+
+            result.SetField(
+                "objectivesMaskTeam0",
+                TsValue.FromString(
+                    objectivesMaskTeam0.ToString(
+                        System.Globalization.CultureInfo.InvariantCulture
+                    )
+                )
+            );
+
+            result.SetField(
+                "objectivesMaskTeam1",
+                TsValue.FromString(
+                    objectivesMaskTeam1.ToString(
+                        System.Globalization.CultureInfo.InvariantCulture
+                    )
+                )
+            );
+
+            result.SetField(
+                "matchEndTime",
+                TsValue.FromInt32(
+                    unchecked(
+                        (int)matchEndTime
+                    )
+                )
+            );
+
+            result.SetField(
+                "safeToAbandon",
+                TsValue.FromBool(
+                    safeToAbandon
+                )
+            );
+
+            result.SetField(
+                "teamAbandon",
+                TsValue.FromBool(
+                    teamAbandon
+                )
+            );
+
+            result.SetField(
+                "newPlayerPool",
+                TsValue.FromBool(
+                    newPlayerPool
+                )
+            );
+
+            result.SetField(
+                "lowPriPool",
+                TsValue.FromBool(
+                    lowPriPool
+                )
+            );
+
+            result.SetField(
+                "notScored",
+                TsValue.FromBool(
+                    notScored
+                )
+            );
+
+            result.SetField(
+                "rankType",
+                TsValue.FromInt32(
+                    unchecked(
+                        (int)rankType
+                    )
+                )
+            );
+
+            result.SetField(
+                "rankInterval",
+                TsValue.FromInt32(
+                    unchecked(
+                        (int)rankInterval
+                    )
+                )
+            );
+
+            var playerArray =
+                new TsArray();
+
+            foreach (
+                var player in
+                    players
+            )
+            {
+                var item =
+                    new TsObject(
+                        "DeadlockMatchSignoutPlayer"
+                    );
+
+                item.SetField(
+                    "accountId",
+                    TsValue.FromInt32(
+                        unchecked(
+                            (int)player.AccountId
+                        )
+                    )
+                );
+
+                item.SetField(
+                    "team",
+                    TsValue.FromInt32(
+                        unchecked(
+                            (int)player.Team
+                        )
+                    )
+                );
+
+                item.SetField(
+                    "playerSlot",
+                    TsValue.FromInt32(
+                        unchecked(
+                            (int)player.PlayerSlot
+                        )
+                    )
+                );
+
+                item.SetField(
+                    "heroId",
+                    TsValue.FromInt32(
+                        unchecked(
+                            (int)player.HeroId
+                        )
+                    )
+                );
+
+                item.SetField(
+                    "kills",
+                    TsValue.FromInt32(
+                        unchecked(
+                            (int)player.Kills
+                        )
+                    )
+                );
+
+                item.SetField(
+                    "deaths",
+                    TsValue.FromInt32(
+                        unchecked(
+                            (int)player.Deaths
+                        )
+                    )
+                );
+
+                item.SetField(
+                    "netWorth",
+                    TsValue.FromInt32(
+                        unchecked(
+                            (int)player.NetWorth
+                        )
+                    )
+                );
+
+                item.SetField(
+                    "assists",
+                    TsValue.FromInt32(
+                        unchecked(
+                            (int)player.Assists
+                        )
+                    )
+                );
+
+                item.SetField(
+                    "lastHits",
+                    TsValue.FromInt32(
+                        unchecked(
+                            (int)player.LastHits
+                        )
+                    )
+                );
+
+                item.SetField(
+                    "denies",
+                    TsValue.FromInt32(
+                        unchecked(
+                            (int)player.Denies
+                        )
+                    )
+                );
+
+                item.SetField(
+                    "abilityPoints",
+                    TsValue.FromInt32(
+                        unchecked(
+                            (int)player.AbilityPoints
+                        )
+                    )
+                );
+
+                item.SetField(
+                    "level",
+                    TsValue.FromInt32(
+                        unchecked(
+                            (int)player.Level
+                        )
+                    )
+                );
+
+                item.SetField(
+                    "assignedLane",
+                    TsValue.FromInt32(
+                        unchecked(
+                            (int)player.AssignedLane
+                        )
+                    )
+                );
+
+                item.SetField(
+                    "partyIndex",
+                    TsValue.FromInt32(
+                        unchecked(
+                            (int)player.PartyIndex
+                        )
+                    )
+                );
+
+                item.SetField(
+                    "platform",
+                    TsValue.FromInt32(
+                        unchecked(
+                            (int)player.Platform
+                        )
+                    )
+                );
+
+                item.SetField(
+                    "abilityDamage",
+                    TsValue.FromInt32(
+                        unchecked(
+                            (int)player.AbilityDamage
+                        )
+                    )
+                );
+
+                item.SetField(
+                    "bulletDamage",
+                    TsValue.FromInt32(
+                        unchecked(
+                            (int)player.BulletDamage
+                        )
+                    )
+                );
+
+                item.SetField(
+                    "playerHealing",
+                    TsValue.FromInt32(
+                        unchecked(
+                            (int)player.PlayerHealing
+                        )
+                    )
+                );
+
+                item.SetField(
+                    "playerBulletDamage",
+                    TsValue.FromInt32(
+                        unchecked(
+                            (int)player.PlayerBulletDamage
+                        )
+                    )
+                );
+
+                item.SetField(
+                    "playerAbilityDamage",
+                    TsValue.FromInt32(
+                        unchecked(
+                            (int)player.PlayerAbilityDamage
+                        )
+                    )
+                );
+
+                item.SetField(
+                    "playerMeleeDamage",
+                    TsValue.FromInt32(
+                        unchecked(
+                            (int)player.PlayerMeleeDamage
+                        )
+                    )
+                );
+
+                item.SetField(
+                    "abandonMatchTimeS",
+                    TsValue.FromInt32(
+                        unchecked(
+                            (int)player.AbandonMatchTimeS
+                        )
+                    )
+                );
+
+                item.SetField(
+                    "abandonTimeStamp",
+                    TsValue.FromInt32(
+                        unchecked(
+                            (int)player.AbandonTimeStamp
+                        )
+                    )
+                );
+
+                item.SetField(
+                    "objectiveDamage",
+                    TsValue.FromInt32(
+                        unchecked(
+                            (int)player.ObjectiveDamage
+                        )
+                    )
+                );
+
+                item.SetField(
+                    "requiresSkillCalibration",
+                    TsValue.FromBool(
+                        player.RequiresSkillCalibration
+                    )
+                );
+
+                item.SetField(
+                    "matchNumber",
+                    TsValue.FromInt32(
+                        unchecked(
+                            (int)player.MatchNumber
+                        )
+                    )
+                );
+
+                item.SetField(
+                    "playerMatchOutcome",
+                    TsValue.FromInt32(
+                        unchecked(
+                            (int)player.PlayerMatchOutcome
+                        )
+                    )
+                );
+
+                item.SetField(
+                    "rankChangeDelta",
+                    TsValue.FromInt32(
+                        player.RankChangeDelta
+                    )
+                );
+
+                item.SetField(
+                    "itemCount",
+                    TsValue.FromInt32(
+                        unchecked(
+                            (int)player.ItemCount
+                        )
+                    )
+                );
+
+                playerArray.Add(
+                    new TsObjectValue(
+                        item
+                    )
+                );
+            }
+
+            result.SetField(
+                "players",
+                new TsArrayValue(
+                    playerArray
+                )
+            );
+
+            return new TsObjectValue(
+                result
+            );
+        }
+
+        if (
+            _request.MessageType !=
+            10014
+        )
+        {
+            return BuildResult(
+                false,
+                "wrong_message_type"
+            );
+        }
+
+        var validator =
+            DeadlockGcRuntimeServices
+                .DedicatedGameServerValidator;
+
+        if (
+            validator ==
+                null ||
+            !validator(
+                _context.SteamId
+            )
+        )
+        {
+            _logger.LogWarning(
+                "Deadlock 10014 decoder rejected SteamID {SteamId}: not a registered dedicated",
+                _context.SteamId
+            );
+
+            return BuildResult(
+                false,
+                "not_registered_dedicated"
+            );
+        }
+
+        byte[] payload;
+
+        try
+        {
+            payload =
+                Convert.FromBase64String(
+                    _request.BodyBase64 ??
+                    string.Empty
+                );
+        }
+        catch (
+            FormatException
+        )
+        {
+            return BuildResult(
+                false,
+                "invalid_base64"
+            );
+        }
+
+        payloadBytes =
+            payload.Length;
+
+        var outerOffset =
+            0;
+
+        while (
+            outerOffset <
+            payload.Length
+        )
+        {
+            if (
+                !TryReadVarUInt64(
+                    payload,
+                    ref outerOffset,
+                    out var key
+                )
+            )
+            {
+                failureReason =
+                    "malformed_outer_key";
+
+                break;
+            }
+
+            var field =
+                unchecked(
+                    (int)(
+                        key >>
+                        3
+                    )
+                );
+
+            var wire =
+                unchecked(
+                    (int)(
+                        key &
+                        7
+                    )
+                );
+
+            if (
+                field <=
+                0
+            )
+            {
+                failureReason =
+                    "invalid_outer_field";
+
+                break;
+            }
+
+            /*
+             * repeated CExtraMsgBlock additional_data = 1;
+             */
+            if (
+                field ==
+                    1
+            )
+            {
+                if (
+                    wire !=
+                        2 ||
+                    !TryReadLengthDelimited(
+                        payload,
+                        ref outerOffset,
+                        out _
+                    )
+                )
+                {
+                    failureReason =
+                        "malformed_additional_data";
+
+                    break;
+                }
+
+                additionalDataCount++;
+
+                continue;
+            }
+
+            /*
+             * uint32 signout_attempt = 2;
+             */
+            if (
+                field ==
+                    2
+            )
+            {
+                if (
+                    wire !=
+                        0 ||
+                    !TryReadVarUInt64(
+                        payload,
+                        ref outerOffset,
+                        out var raw
+                    ) ||
+                    !TryReadUInt32(
+                        raw,
+                        out signoutAttempt
+                    )
+                )
+                {
+                    failureReason =
+                        "malformed_signout_attempt";
+
+                    break;
+                }
+
+                continue;
+            }
+
+            /*
+             * uint64 lobby_id = 3;
+             */
+            if (
+                field ==
+                    3
+            )
+            {
+                if (
+                    wire !=
+                        0 ||
+                    !TryReadVarUInt64(
+                        payload,
+                        ref outerOffset,
+                        out lobbyId
+                    )
+                )
+                {
+                    failureReason =
+                        "malformed_lobby_id";
+
+                    break;
+                }
+
+                hasLobbyId =
+                    true;
+
+                continue;
+            }
+
+            /*
+             * uint64 match_id = 4;
+             */
+            if (
+                field ==
+                    4
+            )
+            {
+                if (
+                    wire !=
+                        0 ||
+                    !TryReadVarUInt64(
+                        payload,
+                        ref outerOffset,
+                        out matchId
+                    )
+                )
+                {
+                    failureReason =
+                        "malformed_match_id";
+
+                    break;
+                }
+
+                continue;
+            }
+
+            /*
+             * uint32 cluster_id = 9;
+             */
+            if (
+                field ==
+                    9
+            )
+            {
+                if (
+                    wire !=
+                        0 ||
+                    !TryReadVarUInt64(
+                        payload,
+                        ref outerOffset,
+                        out var raw
+                    ) ||
+                    !TryReadUInt32(
+                        raw,
+                        out clusterId
+                    )
+                )
+                {
+                    failureReason =
+                        "malformed_cluster_id";
+
+                    break;
+                }
+
+                continue;
+            }
+
+            /*
+             * CMsgMatchData match_data = 10;
+             */
+            if (
+                field ==
+                    10
+            )
+            {
+                if (
+                    wire !=
+                        2 ||
+                    !TryReadLengthDelimited(
+                        payload,
+                        ref outerOffset,
+                        out matchData
+                    )
+                )
+                {
+                    failureReason =
+                        "malformed_match_data";
+
+                    break;
+                }
+
+                hasMatchData =
+                    true;
+
+                continue;
+            }
+
+            if (
+                !TrySkipField(
+                    payload,
+                    ref outerOffset,
+                    wire
+                )
+            )
+            {
+                failureReason =
+                    "malformed_outer_unknown_field";
+
+                break;
+            }
+        }
+
+        if (
+            failureReason.Length >
+            0
+        )
+        {
+            return BuildResult(
+                false,
+                failureReason
+            );
+        }
+
+        if (
+            !hasLobbyId ||
+            lobbyId ==
+                0
+        )
+        {
+            return BuildResult(
+                false,
+                "missing_lobby_id"
+            );
+        }
+
+        /*
+         * Verify that this exact dedicated owns this lobby.
+         */
+        var snapshotProvider =
+            DeadlockGcRuntimeServices
+                .DedicatedServerSnapshot;
+
+        if (
+            snapshotProvider ==
+            null
+        )
+        {
+            return BuildResult(
+                false,
+                "reservation_provider_missing"
+            );
+        }
+
+        var snapshot =
+            snapshotProvider(
+                lobbyId
+            );
+
+        if (
+            !snapshot.Found
+        )
+        {
+            return BuildResult(
+                false,
+                "reservation_not_found"
+            );
+        }
+
+        if (
+            snapshot.GameServerSteamId !=
+            _context.SteamId
+        )
+        {
+            return BuildResult(
+                false,
+                "wrong_gameserver_for_lobby"
+            );
+        }
+
+        if (
+            !hasMatchData
+        )
+        {
+            return BuildResult(
+                false,
+                "missing_match_data"
+            );
+        }
+
+        /*
+         * Parse CMsgMatchData.
+         */
+        var matchOffset =
+            0;
+
+        while (
+            matchOffset <
+            matchData.Length
+        )
+        {
+            if (
+                !TryReadVarUInt64(
+                    matchData,
+                    ref matchOffset,
+                    out var key
+                )
+            )
+            {
+                failureReason =
+                    "malformed_match_data_key";
+
+                break;
+            }
+
+            var field =
+                unchecked(
+                    (int)(
+                        key >>
+                        3
+                    )
+                );
+
+            var wire =
+                unchecked(
+                    (int)(
+                        key &
+                        7
+                    )
+                );
+
+            if (
+                field <=
+                0
+            )
+            {
+                failureReason =
+                    "invalid_match_data_field";
+
+                break;
+            }
+
+            if (
+                field ==
+                    4
+            )
+            {
+                /*
+                 * repeated CMsgMatchData.PlayerInfo players = 4;
+                 */
+                if (
+                    wire !=
+                        2 ||
+                    !TryReadLengthDelimited(
+                        matchData,
+                        ref matchOffset,
+                        out var playerPayload
+                    )
+                )
+                {
+                    failureReason =
+                        "malformed_player";
+
+                    break;
+                }
+
+                uint accountId = 0;
+                uint team = 0;
+                uint playerSlot = 0;
+                uint heroId = 0;
+                uint kills = 0;
+                uint deaths = 0;
+                uint netWorth = 0;
+                uint assists = 0;
+                uint lastHits = 0;
+                uint denies = 0;
+                uint abilityPoints = 0;
+                uint level = 0;
+                uint assignedLane = 0;
+                uint partyIndex = 0;
+                uint platform = 0;
+                uint abilityDamage = 0;
+                uint bulletDamage = 0;
+                uint playerHealing = 0;
+                uint playerBulletDamage = 0;
+                uint playerAbilityDamage = 0;
+                uint playerMeleeDamage = 0;
+                uint abandonMatchTimeS = 0;
+                uint abandonTimeStamp = 0;
+                uint objectiveDamage = 0;
+                bool requiresSkillCalibration = false;
+                uint matchNumber = 0;
+                uint playerMatchOutcome = 0;
+                int rankChangeDelta = 0;
+                uint itemCount = 0;
+
+                var playerOffset =
+                    0;
+
+                while (
+                    playerOffset <
+                    playerPayload.Length
+                )
+                {
+                    if (
+                        !TryReadVarUInt64(
+                            playerPayload,
+                            ref playerOffset,
+                            out var playerKey
+                        )
+                    )
+                    {
+                        failureReason =
+                            "malformed_player_key";
+
+                        break;
+                    }
+
+                    var playerField =
+                        unchecked(
+                            (int)(
+                                playerKey >>
+                                3
+                            )
+                        );
+
+                    var playerWire =
+                        unchecked(
+                            (int)(
+                                playerKey &
+                                7
+                            )
+                        );
+
+                    if (
+                        playerField <=
+                        0
+                    )
+                    {
+                        failureReason =
+                            "invalid_player_field";
+
+                        break;
+                    }
+
+                    /*
+                     * PlayerItem = field 13 / length-delimited.
+                     */
+                    if (
+                        playerField ==
+                            13
+                    )
+                    {
+                        if (
+                            playerWire !=
+                                2 ||
+                            !TryReadLengthDelimited(
+                                playerPayload,
+                                ref playerOffset,
+                                out var itemPayload
+                            ) ||
+                            !TryParsePlayerItem(
+                                itemPayload
+                            )
+                        )
+                        {
+                            failureReason =
+                                "malformed_player_item";
+
+                            break;
+                        }
+
+                        itemCount++;
+
+                        continue;
+                    }
+
+                    /*
+                     * All fields selected below are protobuf varints.
+                     */
+                    var isKnownVarint =
+                        playerField ==
+                            1 ||
+                        playerField ==
+                            2 ||
+                        playerField ==
+                            3 ||
+                        playerField ==
+                            7 ||
+                        playerField ==
+                            8 ||
+                        playerField ==
+                            9 ||
+                        playerField ==
+                            10 ||
+                        playerField ==
+                            11 ||
+                        playerField ==
+                            21 ||
+                        playerField ==
+                            22 ||
+                        playerField ==
+                            23 ||
+                        playerField ==
+                            24 ||
+                        playerField ==
+                            25 ||
+                        playerField ==
+                            26 ||
+                        playerField ==
+                            27 ||
+                        playerField ==
+                            28 ||
+                        playerField ==
+                            29 ||
+                        playerField ==
+                            32 ||
+                        playerField ==
+                            38 ||
+                        playerField ==
+                            39 ||
+                        playerField ==
+                            40 ||
+                        playerField ==
+                            41 ||
+                        playerField ==
+                            42 ||
+                        playerField ==
+                            46 ||
+                        playerField ==
+                            48 ||
+                        playerField ==
+                            53 ||
+                        playerField ==
+                            61 ||
+                        playerField ==
+                            62;
+
+                    if (
+                        isKnownVarint
+                    )
+                    {
+                        if (
+                            playerWire !=
+                                0 ||
+                            !TryReadVarUInt64(
+                                playerPayload,
+                                ref playerOffset,
+                                out var raw
+                            )
+                        )
+                        {
+                            failureReason =
+                                "malformed_known_player_field_" +
+                                playerField;
+
+                            break;
+                        }
+
+                        /*
+                         * rank_change_delta is int32, therefore its
+                         * two's-complement low 32 bits are intentional.
+                         */
+                        if (
+                            playerField ==
+                            62
+                        )
+                        {
+                            rankChangeDelta =
+                                unchecked(
+                                    (int)raw
+                                );
+
+                            continue;
+                        }
+
+                        if (
+                            !TryReadUInt32(
+                                raw,
+                                out var value
+                            )
+                        )
+                        {
+                            failureReason =
+                                "player_uint32_overflow_field_" +
+                                playerField;
+
+                            break;
+                        }
+
+                        switch (
+                            playerField
+                        )
+                        {
+                            case 1:
+                                accountId = value;
+                                break;
+
+                            case 2:
+                                team = value;
+                                break;
+
+                            case 3:
+                                playerSlot = value;
+                                break;
+
+                            case 7:
+                                heroId = value;
+                                break;
+
+                            case 8:
+                                kills = value;
+                                break;
+
+                            case 9:
+                                deaths = value;
+                                break;
+
+                            case 10:
+                                netWorth = value;
+                                break;
+
+                            case 11:
+                                assists = value;
+                                break;
+
+                            case 21:
+                                lastHits = value;
+                                break;
+
+                            case 22:
+                                denies = value;
+                                break;
+
+                            case 23:
+                                abilityPoints = value;
+                                break;
+
+                            case 24:
+                                level = value;
+                                break;
+
+                            case 25:
+                                assignedLane = value;
+                                break;
+
+                            case 26:
+                                partyIndex = value;
+                                break;
+
+                            case 27:
+                                platform = value;
+                                break;
+
+                            case 28:
+                                abilityDamage = value;
+                                break;
+
+                            case 29:
+                                bulletDamage = value;
+                                break;
+
+                            case 32:
+                                playerHealing = value;
+                                break;
+
+                            case 38:
+                                playerBulletDamage = value;
+                                break;
+
+                            case 39:
+                                playerAbilityDamage = value;
+                                break;
+
+                            case 40:
+                                playerMeleeDamage = value;
+                                break;
+
+                            case 41:
+                                abandonMatchTimeS = value;
+                                break;
+
+                            case 42:
+                                abandonTimeStamp = value;
+                                break;
+
+                            case 46:
+                                objectiveDamage = value;
+                                break;
+
+                            case 48:
+                                requiresSkillCalibration =
+                                    value !=
+                                    0;
+                                break;
+
+                            case 53:
+                                matchNumber = value;
+                                break;
+
+                            case 61:
+                                playerMatchOutcome = value;
+                                break;
+                        }
+
+                        continue;
+                    }
+
+                    if (
+                        !TrySkipField(
+                            playerPayload,
+                            ref playerOffset,
+                            playerWire
+                        )
+                    )
+                    {
+                        failureReason =
+                            "malformed_unknown_player_field_" +
+                            playerField;
+
+                        break;
+                    }
+                }
+
+                if (
+                    failureReason.Length >
+                    0
+                )
+                {
+                    break;
+                }
+
+                players.Add(
+                    (
+                        accountId,
+                        team,
+                        playerSlot,
+                        heroId,
+                        kills,
+                        deaths,
+                        netWorth,
+                        assists,
+                        lastHits,
+                        denies,
+                        abilityPoints,
+                        level,
+                        assignedLane,
+                        partyIndex,
+                        platform,
+                        abilityDamage,
+                        bulletDamage,
+                        playerHealing,
+                        playerBulletDamage,
+                        playerAbilityDamage,
+                        playerMeleeDamage,
+                        abandonMatchTimeS,
+                        abandonTimeStamp,
+                        objectiveDamage,
+                        requiresSkillCalibration,
+                        matchNumber,
+                        playerMatchOutcome,
+                        rankChangeDelta,
+                        itemCount
+                    )
+                );
+
+                continue;
+            }
+
+            /*
+             * Known CMsgMatchData varints.
+             */
+            var isKnownMatchVarint =
+                field ==
+                    1 ||
+                field ==
+                    2 ||
+                field ==
+                    3 ||
+                field ==
+                    6 ||
+                field ==
+                    7 ||
+                field ==
+                    8 ||
+                field ==
+                    9 ||
+                field ==
+                    10 ||
+                field ==
+                    11 ||
+                field ==
+                    13 ||
+                field ==
+                    14 ||
+                field ==
+                    15 ||
+                field ==
+                    16 ||
+                field ==
+                    17 ||
+                field ==
+                    25 ||
+                field ==
+                    26;
+
+            if (
+                isKnownMatchVarint
+            )
+            {
+                if (
+                    wire !=
+                        0 ||
+                    !TryReadVarUInt64(
+                        matchData,
+                        ref matchOffset,
+                        out var raw
+                    )
+                )
+                {
+                    failureReason =
+                        "malformed_known_match_field_" +
+                        field;
+
+                    break;
+                }
+
+                /*
+                 * objective masks are uint64.
+                 */
+                if (
+                    field ==
+                    9
+                )
+                {
+                    objectivesMaskTeam0 =
+                        raw;
+
+                    continue;
+                }
+
+                if (
+                    field ==
+                    10
+                )
+                {
+                    objectivesMaskTeam1 =
+                        raw;
+
+                    continue;
+                }
+
+                if (
+                    !TryReadUInt32(
+                        raw,
+                        out var value
+                    )
+                )
+                {
+                    failureReason =
+                        "match_uint32_overflow_field_" +
+                        field;
+
+                    break;
+                }
+
+                switch (
+                    field
+                )
+                {
+                    case 1:
+                        matchDurationS = value;
+                        break;
+
+                    case 2:
+                        endReason = value;
+                        break;
+
+                    case 3:
+                        winningTeam = value;
+                        break;
+
+                    case 6:
+                        serverVersion = value;
+                        break;
+
+                    case 7:
+                        gameMode = value;
+                        break;
+
+                    case 8:
+                        matchMode = value;
+                        break;
+
+                    case 11:
+                        matchEndTime = value;
+                        break;
+
+                    case 13:
+                        safeToAbandon =
+                            value !=
+                            0;
+                        break;
+
+                    case 14:
+                        teamAbandon =
+                            value !=
+                            0;
+                        break;
+
+                    case 15:
+                        newPlayerPool =
+                            value !=
+                            0;
+                        break;
+
+                    case 16:
+                        lowPriPool =
+                            value !=
+                            0;
+                        break;
+
+                    case 17:
+                        notScored =
+                            value !=
+                            0;
+                        break;
+
+                    case 25:
+                        rankType = value;
+                        break;
+
+                    case 26:
+                        rankInterval = value;
+                        break;
+                }
+
+                continue;
+            }
+
+            if (
+                !TrySkipField(
+                    matchData,
+                    ref matchOffset,
+                    wire
+                )
+            )
+            {
+                failureReason =
+                    "malformed_unknown_match_field_" +
+                    field;
+
+                break;
+            }
+        }
+
+        if (
+            failureReason.Length >
+            0
+        )
+        {
+            _logger.LogWarning(
+                "Deadlock 10014 decode failed lobby {LobbyId} match {MatchId}: {Reason}",
+                lobbyId,
+                matchId,
+                failureReason
+            );
+
+            return BuildResult(
+                false,
+                failureReason
+            );
+        }
+
+        _logger.LogInformation(
+            "Deadlock 10014 decoded lobby {LobbyId} match {MatchId}: duration={Duration}s winner={WinningTeam} mode={GameMode}/{MatchMode} notScored={NotScored} players={Players}",
+            lobbyId,
+            matchId,
+            matchDurationS,
+            winningTeam,
+            gameMode,
+            matchMode,
+            notScored,
+            players.Count
+        );
+
+        return BuildResult(
+            true,
+            "ok"
+        );
+    }
+
+
+
+
+    // SKYNET_DEADLOCK_POST_SIGNOUT_DELAYED_RELEASE_V1_METHOD
+    //
+    // IMPORTANT:
+    // reply(10015) only queues the HTTP response packet. Killing the
+    // requester synchronously from the same exchange can prevent the
+    // dedicated from ever receiving that response.
+    //
+    // This host therefore:
+    //   1. verifies the request is 10014;
+    //   2. verifies the sender is a Supervisor-owned dedicated;
+    //   3. extracts lobby_id (protobuf field 3) from BodyBase64;
+    //   4. verifies lobby -> GameServer SteamID ownership;
+    //   5. schedules Supervisor.Release only after a short delay.
+    //
+    public TsValue DeadlockScheduleCurrentMatchSignoutRelease(
+        TsValue[] args)
+    {
+        static bool TryReadVarint(
+            byte[] data,
+            ref int offset,
+            out ulong value)
+        {
+            value = 0;
+
+            var shift =
+                0;
+
+            while (
+                offset <
+                data.Length &&
+                shift <=
+                63
+            )
+            {
+                var current =
+                    data[
+                        offset++
+                    ];
+
+                if (
+                    shift ==
+                    63 &&
+                    (
+                        current &
+                        0xFE
+                    ) !=
+                    0
+                )
+                {
+                    return false;
+                }
+
+                value |=
+                    (
+                        (ulong)(
+                            current &
+                            0x7F
+                        )
+                    )
+                    <<
+                    shift;
+
+                if (
+                    (
+                        current &
+                        0x80
+                    ) ==
+                    0
+                )
+                {
+                    return true;
+                }
+
+                shift +=
+                    7;
+            }
+
+            return false;
+        }
+
+        static bool TryReadLobbyId(
+            byte[] data,
+            out ulong lobbyId)
+        {
+            lobbyId =
+                0;
+
+            var offset =
+                0;
+
+            while (
+                offset <
+                data.Length
+            )
+            {
+                if (
+                    !TryReadVarint(
+                        data,
+                        ref offset,
+                        out var key
+                    )
+                )
+                {
+                    return false;
+                }
+
+                var fieldNumber =
+                    (int)(
+                        key >>
+                        3
+                    );
+
+                var wireType =
+                    (int)(
+                        key &
+                        7
+                    );
+
+                if (
+                    fieldNumber <=
+                    0
+                )
+                {
+                    return false;
+                }
+
+                /*
+                 * CMsgServerToGCMatchSignout:
+                 *
+                 *   optional uint64 lobby_id = 3;
+                 */
+                if (
+                    fieldNumber ==
+                    3 &&
+                    wireType ==
+                    0
+                )
+                {
+                    return TryReadVarint(
+                        data,
+                        ref offset,
+                        out lobbyId
+                    );
+                }
+
+                switch (
+                    wireType
+                )
+                {
+                    case 0:
+                    {
+                        if (
+                            !TryReadVarint(
+                                data,
+                                ref offset,
+                                out _
+                            )
+                        )
+                        {
+                            return false;
+                        }
+
+                        break;
+                    }
+
+                    case 1:
+                    {
+                        if (
+                            data.Length -
+                            offset <
+                            8
+                        )
+                        {
+                            return false;
+                        }
+
+                        offset +=
+                            8;
+
+                        break;
+                    }
+
+                    case 2:
+                    {
+                        if (
+                            !TryReadVarint(
+                                data,
+                                ref offset,
+                                out var length
+                            )
+                        )
+                        {
+                            return false;
+                        }
+
+                        if (
+                            length >
+                            (ulong)(
+                                data.Length -
+                                offset
+                            )
+                        )
+                        {
+                            return false;
+                        }
+
+                        offset +=
+                            (int)length;
+
+                        break;
+                    }
+
+                    case 5:
+                    {
+                        if (
+                            data.Length -
+                            offset <
+                            4
+                        )
+                        {
+                            return false;
+                        }
+
+                        offset +=
+                            4;
+
+                        break;
+                    }
+
+                    default:
+                    {
+                        return false;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        if (
+            _request.MessageType !=
+            10014
+        )
+        {
+            _logger.LogWarning(
+                "Deadlock delayed dedicated release rejected: current message is {MessageType}, expected 10014",
+                _request.MessageType
+            );
+
+            return TsValue.FromBool(
+                false
+            );
+        }
+
+        var validator =
+            DeadlockGcRuntimeServices
+                .DedicatedGameServerValidator;
+
+        if (
+            validator ==
+            null ||
+            !validator(
+                _context.SteamId
+            )
+        )
+        {
+            _logger.LogWarning(
+                "Deadlock delayed dedicated release rejected: SteamID {SteamId} is not Supervisor-owned",
+                _context.SteamId
+            );
+
+            return TsValue.FromBool(
+                false
+            );
+        }
+
+        byte[] payload;
+
+        try
+        {
+            payload =
+                Convert.FromBase64String(
+                    _request.BodyBase64 ??
+                    string.Empty
+                );
+        }
+        catch (
+            FormatException ex
+        )
+        {
+            _logger.LogWarning(
+                ex,
+                "Deadlock delayed dedicated release could not decode 10014 BodyBase64"
+            );
+
+            return TsValue.FromBool(
+                false
+            );
+        }
+
+        if (
+            !TryReadLobbyId(
+                payload,
+                out var lobbyId
+            ) ||
+            lobbyId ==
+            0
+        )
+        {
+            _logger.LogWarning(
+                "Deadlock delayed dedicated release could not extract lobby_id field 3 from 10014"
+            );
+
+            return TsValue.FromBool(
+                false
+            );
+        }
+
+        var snapshotProvider =
+            DeadlockGcRuntimeServices
+                .DedicatedServerSnapshot;
+
+        if (
+            snapshotProvider ==
+            null
+        )
+        {
+            _logger.LogWarning(
+                "Deadlock delayed dedicated release rejected for lobby {LobbyId}: snapshot provider missing",
+                lobbyId
+            );
+
+            return TsValue.FromBool(
+                false
+            );
+        }
+
+        var snapshot =
+            snapshotProvider(
+                lobbyId
+            );
+
+        if (
+            !snapshot.Found ||
+            snapshot.GameServerSteamId !=
+            _context.SteamId
+        )
+        {
+            _logger.LogWarning(
+                "Deadlock delayed dedicated release ownership mismatch lobby {LobbyId}: requestSteamId={RequestSteamId} reservationSteamId={ReservationSteamId} found={Found}",
+                lobbyId,
+                _context.SteamId,
+                snapshot.GameServerSteamId,
+                snapshot.Found
+            );
+
+            return TsValue.FromBool(
+                false
+            );
+        }
+
+        var release =
+            DeadlockGcRuntimeServices
+                .DedicatedServerRelease;
+
+        if (
+            release ==
+            null
+        )
+        {
+            _logger.LogWarning(
+                "Deadlock delayed dedicated release provider missing for lobby {LobbyId}",
+                lobbyId
+            );
+
+            return TsValue.FromBool(
+                false
+            );
+        }
+
+        var delayMs =
+            35000;
+
+        if (
+            args.Length >
+            0
+        )
+        {
+            delayMs =
+                Math.Clamp(
+                    Convert.ToInt32(
+                        ToNumber(
+                            args[0],
+                            "deadlockScheduleCurrentMatchSignoutRelease.delayMs"
+                        )
+                    ),
+                    250,
+                    120000
+                );
+        }
+
+        var reason =
+            args.Length >
+            1
+                ? ToString(
+                    args[1]
+                )
+                : "match-signout-success";
+
+        if (
+            string.IsNullOrWhiteSpace(
+                reason
+            )
+        )
+        {
+            reason =
+                "match-signout-success";
+        }
+
+        _logger.LogInformation(
+            "Scheduled Deadlock dedicated release lobby {LobbyId} SteamID {SteamId} in {DelayMs}ms after successful 10015",
+            lobbyId,
+            _context.SteamId,
+            delayMs
+        );
+
+        _ =
+            System.Threading.Tasks.Task.Run(
+                async () =>
+                {
+                    await System.Threading.Tasks.Task
+                        .Delay(
+                            delayMs
+                        )
+                        .ConfigureAwait(
+                            false
+                        );
+
+                    try
+                    {
+                        var released =
+                            release(
+                                lobbyId,
+                                reason
+                            );
+
+                        _logger.LogInformation(
+                            "Deadlock delayed dedicated release executed lobby {LobbyId}: released={Released}",
+                            lobbyId,
+                            released
+                        );
+                    }
+                    catch (
+                        Exception ex
+                    )
+                    {
+                        _logger.LogWarning(
+                            ex,
+                            "Deadlock delayed dedicated release failed for lobby {LobbyId}",
+                            lobbyId
+                        );
+                    }
+                }
+            );
+
+        return TsValue.FromBool(
+            true
+        );
+    }
+
+
     // SKYNET_DEADLOCK_DB_EXCHANGE_V3
 
     // SKYNET_DEADLOCK_REAL_9165_DB_V4
@@ -3105,6 +10536,33 @@ internal sealed class ScriptExchangeHost
         return new TsObjectValue(
             stats
         );
+    }
+
+    // SKYNET_DEADLOCK_DEDICATED_STEAMID_GUARD_V1_HOST
+    public TsValue DeadlockIsDedicatedGameServer(TsValue[] args)
+    {
+        var gameServerSteamId =
+            args.Length > 0
+                ? Convert.ToUInt64(
+                    ToInteger(
+                        args[0],
+                        "deadlockIsDedicatedGameServer.steamId"
+                    ).ToString()
+                )
+                : _context.SteamId;
+
+        var allowed =
+            DeadlockGcRuntimeServices
+                .DedicatedGameServerValidator
+                ?.Invoke(gameServerSteamId)
+            ?? false;
+
+        _logger.LogInformation(
+            "Deadlock dedicated allocation guard SteamID={SteamId} Allowed={Allowed}",
+            gameServerSteamId,
+            allowed);
+
+        return TsValue.FromBool(allowed);
     }
 
     public TsValue DeadlockHeroStats(
@@ -5677,5 +13135,439 @@ internal sealed class ScriptExchangeHost
         }
 
         return new TsArrayValue(array);
+    }
+
+
+    // SKYNET_DEADLOCK_LEAVE_LOBBY_9015_REQUEST_ID_V2_HOST
+    //
+    // Losslessly extracts field 1 / lobby_id from the CURRENT
+    // CMsgClientToGCLeaveLobby (9015) BodyBase64.
+    //
+    // We intentionally parse the uint64 in C# so the value never
+    // travels through a JavaScript number.
+    //
+    // This host is READ ONLY:
+    //   - no queue mutation
+    //   - no lifecycle mutation
+    //   - no dedicated release
+    //   - no DB writes
+    public TsValue DeadlockCurrentLeaveLobbyId()
+    {
+        static bool TryReadVarUInt64(
+            byte[] data,
+            ref int offset,
+            out ulong value)
+        {
+            value =
+                0;
+
+            var shift =
+                0;
+
+            while (
+                offset <
+                    data.Length &&
+                shift <=
+                    63
+            )
+            {
+                var current =
+                    data[
+                        offset++
+                    ];
+
+                if (
+                    shift ==
+                        63 &&
+                    (
+                        current &
+                        0xFE
+                    ) !=
+                        0
+                )
+                {
+                    return false;
+                }
+
+                value |=
+                    (
+                        (ulong)(
+                            current &
+                            0x7F
+                        )
+                    ) <<
+                    shift;
+
+                if (
+                    (
+                        current &
+                        0x80
+                    ) ==
+                    0
+                )
+                {
+                    return true;
+                }
+
+                shift +=
+                    7;
+            }
+
+            return false;
+        }
+
+        static bool TrySkipField(
+            byte[] data,
+            ref int offset,
+            int wireType)
+        {
+            switch (
+                wireType
+            )
+            {
+                case 0:
+                {
+                    return TryReadVarUInt64(
+                        data,
+                        ref offset,
+                        out _
+                    );
+                }
+
+                case 1:
+                {
+                    if (
+                        data.Length -
+                            offset <
+                        8
+                    )
+                    {
+                        return false;
+                    }
+
+                    offset +=
+                        8;
+
+                    return true;
+                }
+
+                case 2:
+                {
+                    if (
+                        !TryReadVarUInt64(
+                            data,
+                            ref offset,
+                            out var length
+                        )
+                    )
+                    {
+                        return false;
+                    }
+
+                    if (
+                        length >
+                        (ulong)(
+                            data.Length -
+                            offset
+                        )
+                    )
+                    {
+                        return false;
+                    }
+
+                    offset +=
+                        (int)length;
+
+                    return true;
+                }
+
+                case 5:
+                {
+                    if (
+                        data.Length -
+                            offset <
+                        4
+                    )
+                    {
+                        return false;
+                    }
+
+                    offset +=
+                        4;
+
+                    return true;
+                }
+
+                default:
+                {
+                    return false;
+                }
+            }
+        }
+
+        if (
+            _request.MessageType !=
+            9015
+        )
+        {
+            return TsValue.FromUInt64(
+                0UL
+            );
+        }
+
+        byte[] payload;
+
+        try
+        {
+            payload =
+                Convert.FromBase64String(
+                    _request.BodyBase64 ??
+                    string.Empty
+                );
+        }
+        catch (
+            FormatException ex
+        )
+        {
+            _logger.LogWarning(
+                ex,
+                "Deadlock 9015 could not decode BodyBase64 for SteamID {SteamId}",
+                _context.SteamId
+            );
+
+            return TsValue.FromUInt64(
+                0UL
+            );
+        }
+
+        var offset =
+            0;
+
+        while (
+            offset <
+            payload.Length
+        )
+        {
+            if (
+                !TryReadVarUInt64(
+                    payload,
+                    ref offset,
+                    out var key
+                )
+            )
+            {
+                _logger.LogWarning(
+                    "Deadlock 9015 malformed protobuf key from SteamID {SteamId}",
+                    _context.SteamId
+                );
+
+                return TsValue.FromUInt64(
+                    0UL
+                );
+            }
+
+            var fieldNumber =
+                key >>
+                3;
+
+            var wireType =
+                unchecked(
+                    (int)(
+                        key &
+                        7UL
+                    )
+                );
+
+            if (
+                fieldNumber ==
+                0
+            )
+            {
+                _logger.LogWarning(
+                    "Deadlock 9015 invalid protobuf field number from SteamID {SteamId}",
+                    _context.SteamId
+                );
+
+                return TsValue.FromUInt64(
+                    0UL
+                );
+            }
+
+            if (
+                fieldNumber ==
+                1UL
+            )
+            {
+                if (
+                    wireType !=
+                        0 ||
+                    !TryReadVarUInt64(
+                        payload,
+                        ref offset,
+                        out var lobbyId
+                    )
+                )
+                {
+                    _logger.LogWarning(
+                        "Deadlock 9015 malformed lobby_id from SteamID {SteamId}",
+                        _context.SteamId
+                    );
+
+                    return TsValue.FromUInt64(
+                        0UL
+                    );
+                }
+
+                _logger.LogInformation(
+                    "Deadlock 9015 decoded request lobby_id={LobbyId} SteamID={SteamId}",
+                    lobbyId,
+                    _context.SteamId
+                );
+
+                return TsValue.FromUInt64(
+                    lobbyId
+                );
+            }
+
+            if (
+                !TrySkipField(
+                    payload,
+                    ref offset,
+                    wireType
+                )
+            )
+            {
+                _logger.LogWarning(
+                    "Deadlock 9015 malformed unknown field {FieldNumber} wire={WireType} from SteamID {SteamId}",
+                    fieldNumber,
+                    wireType,
+                    _context.SteamId
+                );
+
+                return TsValue.FromUInt64(
+                    0UL
+                );
+            }
+        }
+
+        _logger.LogInformation(
+            "Deadlock 9015 request contains no lobby_id for SteamID {SteamId}",
+            _context.SteamId
+        );
+
+        return TsValue.FromUInt64(
+            0UL
+        );
+    }
+
+
+    // SKYNET_DEADLOCK_CLIENT_ASSIGN_HOST_V111
+    public TsValue DeadlockQueueGcMessageForAccount(
+        TsValue[] args)
+    {
+        if (args.Length < 3)
+        {
+            throw new InvalidOperationException(
+                "deadlockQueueGcMessageForAccount(accountId, messageType, payload, protobuf?) requires at least 3 arguments"
+            );
+        }
+
+        var accountId =
+            Convert.ToUInt32(
+                ToNumber(
+                    args[0],
+                    "deadlockQueueGcMessageForAccount.accountId"
+                )
+            );
+
+        if (accountId == 0)
+        {
+            throw new InvalidOperationException(
+                "deadlockQueueGcMessageForAccount.accountId must be non-zero"
+            );
+        }
+
+        const ulong SteamIdIndividualBase =
+            76561197960265728UL;
+
+        var targetSteamId =
+            SteamIdIndividualBase +
+            accountId;
+
+        var messageType =
+            Convert.ToUInt32(
+                ToNumber(
+                    args[1],
+                    "deadlockQueueGcMessageForAccount.messageType"
+                )
+            );
+
+        var payload =
+            ToBytes(
+                args[2],
+                "deadlockQueueGcMessageForAccount.payload"
+            );
+
+        var protobuf =
+            args.Length < 4 ||
+            ToBool(
+                args[3],
+                "deadlockQueueGcMessageForAccount.protobuf"
+            );
+
+        var message =
+            new ApiGCMessage
+            {
+                AppId =
+                    _context.AppId,
+
+                MessageType =
+                    messageType,
+
+                PayloadBase64 =
+                    Convert.ToBase64String(
+                        payload
+                    ),
+
+                Protobuf =
+                    protobuf
+            };
+
+        if (
+            targetSteamId ==
+            _context.SteamId
+        )
+        {
+            Response.Messages.Add(
+                message
+            );
+
+            return TsValue.FromBool(
+                true
+            );
+        }
+
+        var queue =
+            DotaGcRuntimeServices
+                .PendingMessageQueued;
+
+        if (
+            queue ==
+            null
+        )
+        {
+            return TsValue.FromBool(
+                false
+            );
+        }
+
+        queue.Invoke(
+            targetSteamId,
+            message
+        );
+
+        return TsValue.FromBool(
+            true
+        );
     }
 }

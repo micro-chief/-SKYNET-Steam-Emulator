@@ -35,6 +35,14 @@ if (args.Contains("--verify-gc-ts"))
     return;
 }
 
+// Focused AppID 730 check, kept independent from the larger Dota regression
+// suite so CS2 protocol work has a small deterministic verification target.
+if (args.Contains("--verify-cs2-gc-ts"))
+{
+    Environment.ExitCode = GcScriptSelfCheck.RunCs2(Console.WriteLine) ? 0 : 1;
+    return;
+}
+
 // Self-check that Dota's item importer keeps equipable hero/global cosmetics
 // while dropping tools, bundles, treasures, gems, and other non-loadout entries.
 if (args.Contains("--verify-dota-cosmetics"))
@@ -43,7 +51,43 @@ if (args.Contains("--verify-dota-cosmetics"))
     return;
 }
 
+// Verify both the CS2 KeyValues parser and, when installed locally, the real
+// items_game.txt import used by the AppID 730 inventory SO cache.
+if (args.Contains("--verify-cs2-catalog"))
+{
+    var ok = Cs2ItemCatalog.RunSelfCheck(Console.WriteLine);
+    try
+    {
+        var catalog = Cs2ItemCatalog.Import(null);
+        var categoryCounts = catalog.Items
+            .GroupBy(item => item.Category)
+            .OrderBy(group => group.Key)
+            .Select(group => $"{group.Key}={group.Count()}");
+        Console.WriteLine(
+            $"CS2 catalog import -> items={catalog.Items.Count}, {string.Join(", ", categoryCounts)}, " +
+            $"clientVersion={catalog.ClientVersion}, source={catalog.SourcePath}");
+        ok &= catalog.Items.Count > 0 &&
+              new[]
+              {
+                  "weapon", "knife", "agent", "sticker", "graffiti", "keychain", "music",
+                  "patch", "glove", "case", "case_key", "souvenir_case", "sticker_capsule",
+                  "graffiti_box", "trophy"
+              }
+                  .All(category => catalog.Items.Any(item => item.Category == category));
+        Cs2GcRuntimeServices.UseItemCatalog(catalog);
+        ok &= GcScriptSelfCheck.RunCs2(Console.WriteLine);
+    }
+    catch (FileNotFoundException ex)
+    {
+        Console.WriteLine($"CS2 installation not found; fixture check only: {ex.Message}");
+    }
+
+    Environment.ExitCode = ok ? 0 : 1;
+    return;
+}
+
 var builder = WebApplication.CreateBuilder(args);
+Cs2GcRuntimeServices.Configure(builder.Configuration, builder.Environment.ContentRootPath);
 
 builder.Services.AddRazorPages()
     .AddJsonOptions(options => SkynetJsonSerializerOptions.AddCompatibilityConverters(options.JsonSerializerOptions));
@@ -57,6 +101,8 @@ builder.Services.AddSingleton<GameStatCatalogService>();
 builder.Services.AddSingleton<EncryptedAppTicketKeyStore>();
 builder.Services.AddSingleton<EncryptedAppTicketService>();
 builder.Services.AddSingleton<DotaDedicatedServerSupervisor>();
+// SKYNET_DEADLOCK_DEDICATED_DI_V1
+builder.Services.AddSingleton<DeadlockDedicatedServerSupervisor>();
 builder.Services.AddSingleton<DotaDB>();
 builder.Services.AddSingleton<DeadlockDB>();
 builder.Services.AddSingleton<DedicatedServerService>();
@@ -73,11 +119,13 @@ builder.Services.AddPooledDbContextFactory<DotaDbContext>(options =>
 builder.Services.AddSingleton<SteamApiStateService>();
 builder.Services.AddHostedService<DiscoveryService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<DotaDedicatedServerSupervisor>());
+builder.Services.AddHostedService(sp => sp.GetRequiredService<DeadlockDedicatedServerSupervisor>());
 builder.Services.AddHostedService<GameCoordinatorTickService>();
 builder.Services.AddHostedService<PresenceSweepService>();
 builder.Services.AddHostedService<SKYNET_server.Services.Networking.SdrRelayService>();
 
 var app = builder.Build();
+app.Logger.LogInformation("CS2 item catalog: {CatalogStatus}", Cs2GcRuntimeServices.ItemCatalogStatus);
 
 
 // Prepare split SQLite stores before any facade touches them. app.db and older
@@ -137,10 +185,60 @@ DeadlockGcRuntimeServices.MatchHistoryJsonProvider =
             accountId
         );
 
+// SKYNET_DEADLOCK_SEARCHABLE_MATCH_ID_V28_WIRE
+DeadlockGcRuntimeServices.MatchIdAllocator =
+    () =>
+        deadlockGcDb.AllocateMatchId();
+
 DeadlockGcRuntimeServices.HeroStatsJsonProvider =
     accountId =>
         deadlockGcDb.GetHeroStats(
             accountId
+        );
+
+// SKYNET_DEADLOCK_DEDICATED_RUNTIME_WIRE_V1
+var deadlockDedicatedServers =
+    app.Services.GetRequiredService<DeadlockDedicatedServerSupervisor>();
+
+// SKYNET_DEADLOCK_CONDITIONAL_BOTS_V1_WIRE
+DeadlockGcRuntimeServices.DedicatedServerStart =
+    (lobbyId, map, botDifficulty) =>
+        deadlockDedicatedServers.Start(
+            lobbyId,
+            map,
+            botDifficulty
+        );
+
+DeadlockGcRuntimeServices.DedicatedServerClaim =
+    (gameServerSteamId, port) =>
+        deadlockDedicatedServers.ClaimLobby(
+            gameServerSteamId,
+            port
+        );
+
+DeadlockGcRuntimeServices.DedicatedServerPortReserved =
+    port =>
+        deadlockDedicatedServers.HasReservationForPort(
+            port
+        );
+
+DeadlockGcRuntimeServices.DedicatedServerSnapshot =
+    lobbyId =>
+        deadlockDedicatedServers.GetReservation(
+            lobbyId
+        );
+
+DeadlockGcRuntimeServices.DedicatedServerStatus =
+    lobbyId =>
+        deadlockDedicatedServers.GetStatus(
+            lobbyId
+        );
+
+DeadlockGcRuntimeServices.DedicatedServerRelease =
+    (lobbyId, reason) =>
+        deadlockDedicatedServers.Release(
+            lobbyId,
+            reason
         );
 
 _ = app.Services.GetRequiredService<DedicatedServerService>();

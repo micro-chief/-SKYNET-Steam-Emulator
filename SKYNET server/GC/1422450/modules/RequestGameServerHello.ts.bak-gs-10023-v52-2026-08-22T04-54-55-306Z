@@ -1,0 +1,137 @@
+import {
+    HandlerContext,
+    encodeProto
+} from "../framework/gc";
+
+import {
+    getCurrentDeadlockPartyState
+} from "./RequestDeadlockPartyCreate";
+
+import {
+    CMsgClientHello,
+    CMsgClientWelcome,
+    GcRoute,
+    ProtoDescriptor,
+} from "../generated/protobuf";
+
+const requestProto = {
+    name: "CMsgClientHello",
+} as ProtoDescriptor<CMsgClientHello>;
+
+const responseProto = {
+    name: "CMsgClientWelcome",
+} as ProtoDescriptor<CMsgClientWelcome>;
+
+const GS_ALLOCATE_FOR_MATCH =
+    10021;
+
+export const RequestGameServerHelloRoute = {
+    requestId: 4007,
+    request: requestProto,
+    responseId: 4005,
+    response: responseProto,
+} as GcRoute<
+    CMsgClientHello,
+    CMsgClientWelcome
+>;
+
+export function requestGameServerHello(
+    ctx: HandlerContext<
+        CMsgClientHello,
+        CMsgClientWelcome
+    >,
+): boolean {
+    log(
+        "[4007-GS] ========================================"
+    );
+
+    log(
+        "[4007-GS] GameServerHello steamId=" +
+        ctx.steamId
+    );
+
+    /*
+     * Preserve the already proven server handshake.
+     */
+    ctx.reply({
+        version:
+            ctx.request.version ?? 1,
+    });
+
+    log(
+        "[4007-GS] queued 4005 GameServerWelcome"
+    );
+
+    const party =
+        getCurrentDeadlockPartyState();
+
+    if (!party) {
+        log(
+            "[10021-GS] SKIP no current Deadlock party"
+        );
+
+        return true;
+    }
+
+    const matchId =
+        party.party_id ?? 0n;
+
+    if (
+        matchId == 0n
+    ) {
+        log(
+            "[10021-GS] SKIP match_id=0"
+        );
+
+        return true;
+    }
+
+    /*
+     * Wire-compatible RAW protobuf encoder.
+     *
+     * CMsgGCToServerAllocateForMatch:
+     *
+     *   uint64 match_id = 1;
+     *
+     * Existing CMsgClientToGCGetMatchMetaData also has:
+     *
+     *   uint64 match_id = 1;
+     *
+     * with all other fields omitted.
+     * Therefore the resulting wire payload is exactly:
+     *
+     *   08 <protobuf-varint(match_id)>
+     *
+     * We use the existing codec only to avoid unsafe
+     * bigint -> number conversion inside TypeSharp.
+     */
+    const allocateBody =
+        encodeProto(
+            "CMsgClientToGCGetMatchMetaData",
+            {
+                match_id:
+                    matchId
+            }
+        );
+
+    log(
+        "[10021-GS] match_id=" +
+        matchId
+    );
+
+    send(
+        GS_ALLOCATE_FOR_MATCH,
+        allocateBody,
+        true
+    );
+
+    log(
+        "[10021-GS] queued AllocateForMatch"
+    );
+
+    log(
+        "[10021-GS] sequence=4007->4005->10021"
+    );
+
+    return true;
+}

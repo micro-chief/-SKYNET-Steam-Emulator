@@ -34,6 +34,16 @@ Use `--after` and `--window` to inspect what follows a specific GC message.
 dotnet run --project "DeveloperTools\NetHookGcJson\NetHookGcJson.csproj" -c Debug --no-build -- "<capture-folder>" "<output-folder>" --after 7038 --window 20
 ```
 
+## App-specific protobuf contracts
+
+Use `--appid` when message ids or protobuf names overlap between games. For a
+Counter-Strike 2 capture, this selects the generated types in `Cs2Proto` and
+the AppID 730 contract manifest:
+
+```powershell
+dotnet run --project "DeveloperTools\NetHookGcJson\NetHookGcJson.csproj" -c Debug --no-build -- "<capture-folder>" "<output-folder>" --appid 730
+```
+
 ## Baseline Comparison
 
 Use `--baseline` with either a previous output folder or a direct

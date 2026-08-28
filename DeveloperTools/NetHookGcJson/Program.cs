@@ -16,6 +16,7 @@ var optionArgs = args.Skip(2).ToArray();
 var queryAfter = TryReadUIntOption(optionArgs, "--after");
 var windowSize = (int)(TryReadUIntOption(optionArgs, "--window") ?? 10);
 var baselinePath = TryReadStringOption(optionArgs, "--baseline");
+var appId = TryReadUIntOption(optionArgs, "--appid") ?? 570;
 
 var inputPath = args.Length > 0
     ? Path.GetFullPath(args[0])
@@ -36,7 +37,13 @@ Directory.CreateDirectory(outputPath);
 var generatedAssembly = typeof(CMsgClientHello).Assembly;
 var resolver = new GcTypeResolver(
     generatedAssembly,
-    Path.GetFullPath(Path.Combine(repoRoot, "SKYNET server", "GC", "570", "contracts")));
+    Path.GetFullPath(Path.Combine(repoRoot, "SKYNET server", "GC", appId.ToString(), "contracts")),
+    appId switch
+    {
+        730 => ["Cs2Proto"],
+        1422450 => ["SKYNET.Server.GameCoordinator.Citadel"],
+        _ => [string.Empty]
+    });
 
 var dumpFiles = Directory.EnumerateFiles(inputPath, "*.bin", SearchOption.AllDirectories)
     .Where(path => Path.GetFileName(path).Contains("_5452_", StringComparison.OrdinalIgnoreCase) ||
@@ -2414,11 +2421,17 @@ public sealed class GcTypeResolver
     private readonly Dictionary<uint, Type> _serverTypes = new();
     private readonly Dictionary<int, Type> _soTypes = new();
     private readonly List<Type> _soCandidateTypes = new();
+    private readonly IReadOnlyList<string> _preferredNamespaces;
 
-    public GcTypeResolver(Assembly generatedAssembly, string contractsPath)
+    public GcTypeResolver(
+        Assembly generatedAssembly,
+        string contractsPath,
+        IReadOnlyList<string>? preferredNamespaces = null)
     {
+        _preferredNamespaces = preferredNamespaces ?? Array.Empty<string>();
         RegisterTypes(generatedAssembly);
         RegisterMessageEnums(generatedAssembly);
+        RegisterConventionMessages(generatedAssembly);
         RegisterSoTypes();
         RegisterRoutes(contractsPath);
         RegisterSdkMessages();
@@ -2492,7 +2505,9 @@ public sealed class GcTypeResolver
 
     private void RegisterTypes(Assembly assembly)
     {
-        foreach (var type in assembly.GetTypes())
+        foreach (var type in assembly.GetTypes()
+                     .OrderBy(GetNamespaceRank)
+                     .ThenBy(type => type.FullName, StringComparer.Ordinal))
         {
             if (type.GetCustomAttribute<ProtoContractAttribute>() == null)
             {
@@ -2505,27 +2520,40 @@ public sealed class GcTypeResolver
 
     private void RegisterType(Type type)
     {
-        _types[type.Name] = type;
+        RegisterTypeAlias(type.Name, type);
         var contractName = type.GetCustomAttribute<ProtoContractAttribute>()?.Name;
-            if (!string.IsNullOrWhiteSpace(contractName))
-            {
-                _types[contractName] = type;
-            }
+        if (!string.IsNullOrWhiteSpace(contractName))
+        {
+            RegisterTypeAlias(contractName, type);
+        }
 
-            if (type.Name.StartsWith("CSODOTA", StringComparison.Ordinal))
-            {
-                _soCandidateTypes.Add(type);
-            }
+        if (type.Name.StartsWith("CSO", StringComparison.Ordinal) &&
+            GetNamespaceRank(type) == 0)
+        {
+            _soCandidateTypes.Add(type);
+        }
 
-            foreach (var nested in type.GetNestedTypes(BindingFlags.Public))
-            {
-                RegisterType(nested);
+        foreach (var nested in type.GetNestedTypes(BindingFlags.Public))
+        {
+            RegisterType(nested);
+        }
+    }
+
+    private void RegisterTypeAlias(string alias, Type type)
+    {
+        if (!_types.TryGetValue(alias, out var current) ||
+            GetNamespaceRank(type) < GetNamespaceRank(current))
+        {
+            _types[alias] = type;
         }
     }
 
     private void RegisterMessageEnums(Assembly assembly)
     {
-        foreach (var enumType in assembly.GetTypes().Where(type => type.IsEnum))
+        foreach (var enumType in assembly.GetTypes()
+                     .Where(type => type.IsEnum)
+                     .OrderBy(GetNamespaceRank)
+                     .ThenBy(type => type.FullName, StringComparer.Ordinal))
         {
             foreach (var name in Enum.GetNames(enumType))
             {
@@ -2548,6 +2576,82 @@ public sealed class GcTypeResolver
                 }
             }
         }
+    }
+
+    private void RegisterConventionMessages(Assembly assembly)
+    {
+        foreach (var enumType in assembly.GetTypes()
+                     .Where(type => type.IsEnum && GetNamespaceRank(type) == 0)
+                     .OrderBy(type => type.FullName, StringComparer.Ordinal))
+        {
+            foreach (var name in Enum.GetNames(enumType))
+            {
+                var field = enumType.GetField(name);
+                if (field == null)
+                {
+                    continue;
+                }
+
+                var signedValue = Convert.ToInt64(Enum.Parse(enumType, name));
+                if (signedValue < 0 || signedValue > uint.MaxValue)
+                {
+                    continue;
+                }
+
+                var messageType = (uint)signedValue;
+                foreach (var alias in BuildMessageAliases(name, field.GetCustomAttribute<ProtoEnumAttribute>()?.Name))
+                {
+                    var compact = alias.Replace("_", string.Empty, StringComparison.Ordinal);
+                    foreach (var candidate in BuildConventionTypeNames(compact))
+                    {
+                        if (!_types.TryGetValue(candidate, out var protoType))
+                        {
+                            continue;
+                        }
+
+                        _clientTypes.TryAdd(messageType, protoType);
+                        _serverTypes.TryAdd(messageType, protoType);
+
+                        if (_types.TryGetValue(candidate + "Results", out var resultsType))
+                        {
+                            _serverTypes[messageType] = resultsType;
+                        }
+
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    private static IEnumerable<string> BuildConventionTypeNames(string compactMessageName)
+    {
+        yield return "CMsg" + compactMessageName;
+
+        if (compactMessageName.StartsWith("GC", StringComparison.Ordinal))
+        {
+            yield return "CMsg" + compactMessageName[2..];
+        }
+
+        const string cs2Prefix = "GCCStrike15v2";
+        if (compactMessageName.StartsWith(cs2Prefix, StringComparison.Ordinal))
+        {
+            yield return "CMsg" + compactMessageName[cs2Prefix.Length..];
+        }
+    }
+
+    private int GetNamespaceRank(Type type)
+    {
+        var typeNamespace = type.Namespace ?? string.Empty;
+        for (var index = 0; index < _preferredNamespaces.Count; index++)
+        {
+            if (string.Equals(typeNamespace, _preferredNamespaces[index], StringComparison.Ordinal))
+            {
+                return index;
+            }
+        }
+
+        return int.MaxValue;
     }
 
     private void RegisterSoTypes()
@@ -2611,7 +2715,7 @@ public sealed class GcTypeResolver
         }
 
         destination[messageType.Value] = protoType;
-        RegisterMessageAlias(messageType.Value, messageName, overwriteDisplayName: false);
+        RegisterMessageAlias(messageType.Value, messageName, overwriteDisplayName: true);
     }
 
     private void RegisterSdkMessages()

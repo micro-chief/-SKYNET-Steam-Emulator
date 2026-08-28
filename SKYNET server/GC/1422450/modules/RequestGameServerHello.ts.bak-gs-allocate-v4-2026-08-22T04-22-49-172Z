@@ -1,0 +1,453 @@
+import {
+    HandlerContext
+} from "../framework/gc";
+
+import {
+    CMsgClientHello,
+    CMsgClientWelcome,
+    GcRoute,
+    ProtoDescriptor
+} from "../generated/protobuf";
+
+import {
+    getCurrentDeadlockPartyState
+} from "./RequestDeadlockPartyCreate";
+
+// === SKYNET_DEADLOCK_GS_ALLOCATE_RAW_10021_V3 ===
+//
+// Dedicated GameServer allocation stage:
+//
+//   GameServer 4007
+//       ↓
+//   GC 4005
+//       ↓
+//   once the current Deadlock dedicated reservation is registered:
+//   GC RAW 10021 CMsgGCToServerAllocateForMatch
+//
+// 10021 protobuf:
+//
+//   uint64 match_id = 1;
+//
+// We deliberately encode it manually:
+//
+//   field 1 / wire type 0 => key 0x08
+//   followed by uint64 varint.
+//
+// No generated/protobuf.ts modification is required.
+
+const requestProto = {
+    name:
+        "CMsgClientHello"
+} as ProtoDescriptor<CMsgClientHello>;
+
+const responseProto = {
+    name:
+        "CMsgClientWelcome"
+} as ProtoDescriptor<CMsgClientWelcome>;
+
+export const RequestGameServerHelloRoute = {
+    requestId:
+        4007,
+
+    request:
+        requestProto,
+
+    responseId:
+        4005,
+
+    response:
+        responseProto
+} as GcRoute<
+    CMsgClientHello,
+    CMsgClientWelcome
+>;
+
+let allocationServerSteamId =
+    "";
+
+let allocationMatchId =
+    0n;
+
+let allocationLastSentAt =
+    0;
+
+let allocationAccepted =
+    false;
+
+function encodeVarint64(
+    input: bigint
+): number[] {
+    let value =
+        input;
+
+    const bytes: number[] =
+        [];
+
+    if (
+        value <
+        0n
+    ) {
+        value =
+            0n;
+    }
+
+    while (
+        value >=
+        128n
+    ) {
+        bytes.push(
+            Number(
+                (
+                    value &
+                    127n
+                ) |
+                128n
+            )
+        );
+
+        value =
+            value >>
+            7n;
+    }
+
+    bytes.push(
+        Number(
+            value
+        )
+    );
+
+    return bytes;
+}
+
+function encodeAllocateForMatch(
+    matchId: bigint
+): number[] {
+    const body: number[] = [
+        8
+    ];
+
+    const encoded =
+        encodeVarint64(
+            matchId
+        );
+
+    for (
+        let i =
+            0;
+
+        i <
+            encoded.length;
+
+        i++
+    ) {
+        body.push(
+            encoded[i]
+        );
+    }
+
+    return body;
+}
+
+function serverIdText(
+    value: any
+): string {
+    if (
+        value == null
+    ) {
+        return "0";
+    }
+
+    return (
+        "" +
+        value
+    );
+}
+
+export function markDeadlockAllocateForMatchResponse(
+    serverSteamId: any,
+    success: boolean
+): void {
+    const incomingServer =
+        serverIdText(
+            serverSteamId
+        );
+
+    log(
+        "[GS-ALLOC] recv 10022 server=" +
+        incomingServer +
+        " success=" +
+        success
+    );
+
+    if (
+        allocationServerSteamId !==
+        incomingServer
+    ) {
+        log(
+            "[GS-ALLOC] 10022 ignored: expected server=" +
+            allocationServerSteamId
+        );
+
+        return;
+    }
+
+    allocationAccepted =
+        success;
+
+    if (
+        success
+    ) {
+        log(
+            "[GS-ALLOC] allocation ACCEPTED match_id=" +
+            allocationMatchId
+        );
+    }
+    else {
+        /*
+         * Allow retry on the next 4007 keepalive.
+         */
+        allocationLastSentAt =
+            0;
+
+        log(
+            "[GS-ALLOC] allocation REJECTED; retry armed"
+        );
+    }
+}
+
+// === SKYNET_GS_ALLOCATE_RAW_10021_V3_SUPPORT_BEGIN ===
+
+const GS_ALLOCATE_FOR_MATCH_MESSAGE_ID =
+    10021;
+
+const GS_ALLOCATE_FOR_MATCH_RESPONSE_MESSAGE_ID =
+    10022;
+
+function encodeGsAllocateForMatchRawV3(
+    matchId: bigint
+): number[] {
+    const bytes: number[] = [
+        0x08
+    ];
+
+    let value =
+        matchId;
+
+    while (
+        value >= 128n
+    ) {
+        bytes.push(
+            Number(
+                value % 128n
+            ) + 128
+        );
+
+        value =
+            value / 128n;
+    }
+
+    bytes.push(
+        Number(value)
+    );
+
+    return bytes;
+}
+
+/*
+ * RAW probe route for:
+ *
+ * CMsgGCToServerAllocateForMatchResponse
+ * {
+ *     bool success = 1;
+ * }
+ *
+ * No generated Citadel server protobuf is required.
+ * No response is sent from this handler.
+ */
+export const GameServerAllocateForMatchResponseRawV3Route = {
+    requestId:
+        GS_ALLOCATE_FOR_MATCH_RESPONSE_MESSAGE_ID,
+
+    request:
+        requestProto,
+
+    responseId:
+        GS_ALLOCATE_FOR_MATCH_RESPONSE_MESSAGE_ID,
+
+    response:
+        responseProto
+} as GcRoute<
+    CMsgClientHello,
+    CMsgClientWelcome
+>;
+
+export function gameServerAllocateForMatchResponseRawV3(
+    ctx: any
+): boolean {
+    const raw =
+        body();
+
+    const rawLength =
+        raw.length ?? 0;
+
+    const byte0 =
+        rawLength > 0
+            ? raw[0]
+            : -1;
+
+    const byte1 =
+        rawLength > 1
+            ? raw[1]
+            : -1;
+
+    const decodedField1 =
+        ctx.request.version ?? 0;
+
+    const rawSuccess =
+        byte0 == 0x08 &&
+        byte1 != 0;
+
+    const decodedSuccess =
+        decodedField1 != 0;
+
+    const success =
+        rawSuccess ||
+        decodedSuccess;
+
+    log(
+        "[10022-GS] ========================================"
+    );
+
+    log(
+        "[10022-GS] steamId=" +
+        ctx.steamId
+    );
+
+    log(
+        "[10022-GS] raw.length=" +
+        rawLength +
+        " byte0=" +
+        byte0 +
+        " byte1=" +
+        byte1
+    );
+
+    log(
+        "[10022-GS] decoded.field1=" +
+        decodedField1
+    );
+
+    log(
+        "[10022-GS] success=" +
+        success
+    );
+
+    log(
+        "[10022-GS] allocation response received"
+    );
+
+    return true;
+}
+
+// === SKYNET_GS_ALLOCATE_RAW_10021_V3_SUPPORT_END ===
+
+export function requestGameServerHello(
+    ctx: HandlerContext<
+        CMsgClientHello,
+        CMsgClientWelcome
+    >
+): boolean {
+    log(
+        "[4007-GS] ========================================"
+    );
+
+    log(
+        "[4007-GS] hello steamId=" +
+        ctx.steamId
+    );
+
+    /*
+     * Preserve the already-working GameServer welcome.
+     */
+    ctx.reply({
+        version:
+            ctx.request.version ?? 1,
+    });
+
+    log(
+        "[4007-GS] queued 4005 GameServerWelcome"
+    );
+
+    /*
+     * P0 probe only.
+     *
+     * We do not have a real CSOCitadelLobby/match object yet.
+     * For the 10021 -> 10022 wire proof, use the current
+     * Deadlock Party/Lobby id as the temporary match_id.
+     */
+    const party =
+        getCurrentDeadlockPartyState();
+
+    if (!party) {
+        log(
+            "[10021-GS] SKIP: no current Deadlock Party"
+        );
+
+        return true;
+    }
+
+    const matchId =
+        party.party_id ?? 0n;
+
+    if (
+        matchId == 0n
+    ) {
+        log(
+            "[10021-GS] SKIP: party_id/match_id is zero"
+        );
+
+        return true;
+    }
+
+    const allocateBody =
+        encodeGsAllocateForMatchRawV3(
+            matchId
+        );
+
+    log(
+        "[10021-GS] match_id=" +
+        matchId
+    );
+
+    log(
+        "[10021-GS] payload.length=" +
+        allocateBody.length
+    );
+
+    /*
+     * Raw TypeSharp host call:
+     *
+     * send(messageType, payloadBytes, protobuf)
+     *
+     * This becomes the SECOND message in the HTTP response
+     * to the dedicated's 4007:
+     *
+     *     4005
+     *     10021
+     */
+    send(
+        GS_ALLOCATE_FOR_MATCH_MESSAGE_ID,
+        allocateBody,
+        true
+    );
+
+    log(
+        "[10021-GS] queued raw AllocateForMatch after 4005"
+    );
+
+    log(
+        "[10021-GS] sequence=4007->4005->10021"
+    );
+
+    return true;
+}

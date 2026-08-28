@@ -3,6 +3,7 @@
   "name": "Deadlock",
   "entryPoint": "main.ts",
   "protoContracts": {
+    "preferredNamespaces": ["SKYNET.Server.GameCoordinator.Citadel", ""],
     "sources": [
       {
         "assembly": "server"

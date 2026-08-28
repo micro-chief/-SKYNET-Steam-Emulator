@@ -1,0 +1,209 @@
+import {
+    markDeadlockAllocateForMatchResponse
+} from "./RequestGameServerHello";
+
+// === SKYNET_DEADLOCK_GS_ALLOCATE_RAW_10022_V3 ===
+//
+// RAW handler for:
+//
+//   10022 CMsgGCToServerAllocateForMatchResponse
+//
+// Expected protobuf:
+//
+//   bool success = 1;
+//
+// Usually:
+//
+//   08 01  => success=true
+//   08 00  => success=false
+//
+// We intentionally do not depend on a generated Citadel
+// GameServer contract.
+
+export const RequestDeadlockAllocateForMatchResponseRawRoute = {
+    requestId:
+        10022,
+
+    request: {
+        name:
+            "__SKYNET_RAW_PROTO__"
+    },
+
+    responseId:
+        0,
+
+    response: {
+        name:
+            "__SKYNET_RAW_PROTO__"
+    }
+};
+
+function rawLength(
+    value: any
+): number {
+    if (
+        value == null
+    ) {
+        return 0;
+    }
+
+    return (
+        value.length ??
+        0
+    );
+}
+
+function rawByte(
+    value: any,
+    index: number
+): number {
+    if (
+        value == null
+    ) {
+        return 0;
+    }
+
+    return (
+        value[index] ??
+        0
+    ) &
+        255;
+}
+
+function parseSuccess(
+    body: any
+): boolean {
+    const length =
+        rawLength(
+            body
+        );
+
+    /*
+     * Search protobuf key:
+     *
+     *   field 1
+     *   wire type 0
+     *   (1 << 3) | 0 = 8
+     */
+    for (
+        let i =
+            0;
+
+        i <
+            length -
+            1;
+
+        i++
+    ) {
+        if (
+            rawByte(
+                body,
+                i
+            ) !==
+            8
+        ) {
+            continue;
+        }
+
+        return (
+            rawByte(
+                body,
+                i +
+                1
+            ) !==
+            0
+        );
+    }
+
+    return false;
+}
+
+function hexPreview(
+    body: any
+): string {
+    const length =
+        rawLength(
+            body
+        );
+
+    let output =
+        "";
+
+    const limit =
+        length <
+            32
+            ? length
+            : 32;
+
+    for (
+        let i =
+            0;
+
+        i <
+            limit;
+
+        i++
+    ) {
+        if (
+            i >
+            0
+        ) {
+            output +=
+                " ";
+        }
+
+        const value =
+            rawByte(
+                body,
+                i
+            );
+
+        const hex =
+            value.toString(
+                16
+            );
+
+        output +=
+            hex.length ===
+                1
+                ? "0" +
+                  hex
+                : hex;
+    }
+
+    return output;
+}
+
+export function requestDeadlockAllocateForMatchResponseRaw(
+    ctx: any
+): boolean {
+    const raw =
+        ctx.request;
+
+    const success =
+        parseSuccess(
+            raw
+        );
+
+    log(
+        "[GS-ALLOC] 10022 raw bytes=" +
+        rawLength(
+            raw
+        ) +
+        " hex=" +
+        hexPreview(
+            raw
+        )
+    );
+
+    markDeadlockAllocateForMatchResponse(
+        ctx.steamId,
+        success
+    );
+
+    /*
+     * 10022 is already the GameServer's response.
+     * GC sends nothing back here.
+     */
+    return true;
+}

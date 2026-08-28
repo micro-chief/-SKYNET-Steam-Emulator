@@ -1,0 +1,60 @@
+import {
+    Route
+} from "../framework/gc";
+
+export const RequestDeadlockAllocateForMatchResponseRawRoute: Route = {
+    requestId:
+        10022,
+
+    request: {
+        name:
+            "CMsgClientHello"
+    },
+
+    responseId:
+        10022,
+
+    response: {
+        name:
+            "CMsgClientWelcome"
+    }
+};
+
+export function requestDeadlockAllocateForMatchResponseRaw(
+    ctx: any
+): boolean {
+    const successValue =
+        ctx.request.version ?? 0;
+
+    log(
+        "[10022-GS] ========================================"
+    );
+
+    log(
+        "[10022-GS] steamId=" +
+        ctx.steamId
+    );
+
+    log(
+        "[10022-GS] field1=" +
+        successValue
+    );
+
+    if (
+        successValue != 0
+    ) {
+        log(
+            "[10022-GS] success=true"
+        );
+    } else {
+        log(
+            "[10022-GS] success=false"
+        );
+    }
+
+    log(
+        "[10022-GS] AllocateForMatchResponse received"
+    );
+
+    return true;
+}

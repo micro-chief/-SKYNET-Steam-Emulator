@@ -90,8 +90,8 @@ public sealed partial class SteamApiStateService
         try
         {
             var pakPath = ResolvePakPath(importPath);
-            var itemsText = VpkTextReader.ReadText(pakPath, "scripts/items/items_game.txt");
-            var heroesText = VpkTextReader.ReadText(pakPath, "scripts/npc/npc_heroes.txt");
+            var itemsText = ValveVpkReader.ReadText(pakPath, "scripts/items/items_game.txt");
+            var heroesText = ValveVpkReader.ReadText(pakPath, "scripts/npc/npc_heroes.txt");
             var heroIds = DotaItemsGameParser.ParseHeroIds(heroesText);
             var heroSlots = DotaItemsGameParser.ParseHeroSlots(heroesText);
             var items = DotaItemsGameParser.ParseItems(itemsText, heroIds);
@@ -988,7 +988,7 @@ public sealed partial class SteamApiStateService
                 ? DefaultDotaPath
                 : _state.DotaCosmetics.DotaPath;
             var pakPath = ResolvePakPath(ResolveDotaContentPath(dotaPath));
-            var heroesText = VpkTextReader.ReadText(pakPath, "scripts/npc/npc_heroes.txt");
+            var heroesText = ValveVpkReader.ReadText(pakPath, "scripts/npc/npc_heroes.txt");
             _state.DotaHeroSlots = DotaItemsGameParser.ParseHeroSlots(heroesText);
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or FileNotFoundException)
@@ -1142,115 +1142,6 @@ public sealed partial class SteamApiStateService
     {
         write?.Invoke($"{(condition ? "OK" : "FAIL")}: {message}");
         return condition;
-    }
-
-    private static class VpkTextReader
-    {
-        private const uint Signature = 0x55AA1234;
-
-        public static string ReadText(string dirPath, string vpkPath)
-        {
-            var wanted = vpkPath.Replace('\\', '/').TrimStart('/').ToLowerInvariant();
-            using var stream = File.OpenRead(dirPath);
-            using var reader = new BinaryReader(stream, Encoding.UTF8, leaveOpen: false);
-            var signature = reader.ReadUInt32();
-            if (signature != Signature)
-            {
-                throw new InvalidDataException($"Invalid VPK: signature {signature:X8}.");
-            }
-
-            var version = reader.ReadUInt32();
-            var treeLength = reader.ReadUInt32();
-            if (version == 2)
-            {
-                _ = reader.ReadUInt32();
-                _ = reader.ReadUInt32();
-                _ = reader.ReadUInt32();
-                _ = reader.ReadUInt32();
-            }
-
-            var treeStart = stream.Position;
-            while (stream.Position < treeStart + treeLength)
-            {
-                var extension = ReadNullString(reader);
-                if (extension.Length == 0)
-                {
-                    break;
-                }
-
-                while (true)
-                {
-                    var directory = ReadNullString(reader);
-                    if (directory.Length == 0)
-                    {
-                        break;
-                    }
-
-                    while (true)
-                    {
-                        var fileName = ReadNullString(reader);
-                        if (fileName.Length == 0)
-                        {
-                            break;
-                        }
-
-                        _ = reader.ReadUInt32();
-                        var preloadBytes = reader.ReadUInt16();
-                        var archiveIndex = reader.ReadUInt16();
-                        var entryOffset = reader.ReadUInt32();
-                        var entryLength = reader.ReadUInt32();
-                        _ = reader.ReadUInt16();
-
-                        var preload = preloadBytes > 0 ? reader.ReadBytes(preloadBytes) : Array.Empty<byte>();
-                        var fullPath = BuildPath(directory, fileName, extension);
-                        if (!string.Equals(fullPath, wanted, StringComparison.OrdinalIgnoreCase))
-                        {
-                            continue;
-                        }
-
-                        var payload = new byte[preload.Length + entryLength];
-                        Buffer.BlockCopy(preload, 0, payload, 0, preload.Length);
-
-                        if (entryLength > 0)
-                        {
-                            var archivePath = archiveIndex == 0x7FFF
-                                ? dirPath
-                                : Path.Combine(Path.GetDirectoryName(dirPath)!,
-                                    $"{Path.GetFileNameWithoutExtension(dirPath).Replace("_dir", string.Empty)}_{archiveIndex:D3}.vpk");
-
-                            using var archive = File.OpenRead(archivePath);
-                            archive.Position = entryOffset;
-                            archive.ReadExactly(payload, preload.Length, (int)entryLength);
-                        }
-
-                        return Encoding.UTF8.GetString(payload);
-                    }
-                }
-            }
-
-            throw new FileNotFoundException($"{vpkPath} not found inside {dirPath}.", vpkPath);
-        }
-
-        private static string BuildPath(string directory, string fileName, string extension)
-        {
-            var name = extension == " " ? fileName : $"{fileName}.{extension}";
-            return directory == " " ? name.ToLowerInvariant() : $"{directory}/{name}".ToLowerInvariant();
-        }
-
-        private static string ReadNullString(BinaryReader reader)
-        {
-            var bytes = new List<byte>(64);
-            while (true)
-            {
-                var b = reader.ReadByte();
-                if (b == 0)
-                {
-                    return Encoding.UTF8.GetString(bytes.ToArray());
-                }
-
-                bytes.Add(b);
-            }
-        }
     }
 
     private static class DotaItemsGameParser

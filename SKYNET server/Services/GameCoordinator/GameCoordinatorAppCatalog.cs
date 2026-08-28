@@ -270,6 +270,7 @@ public sealed class GameCoordinatorAppCatalog
     {
         options ??= new GameCoordinatorProtoContractOptions();
         options.Sources ??= new List<GameCoordinatorProtoContractSource>();
+        options.PreferredNamespaces ??= new List<string>();
 
         foreach (var source in options.Sources)
         {
@@ -304,12 +305,14 @@ public sealed record GameCoordinatorAppDefinition(
         {
             var hostServices = string.Join(',', HostServices.Order(StringComparer.OrdinalIgnoreCase));
             var contractSources = string.Join(';', ProtoContracts.Sources.Select(ProtoSourceCacheKey));
+            var preferredNamespaces = string.Join('+', ProtoContracts.PreferredNamespaces);
             return string.Join('|',
                 AppId.ToString(CultureInfo.InvariantCulture),
                 EntryPoint,
                 FileIdentity(ManifestPath, includeContentHash: true),
                 hostServices,
                 contractSources,
+                preferredNamespaces,
                 TypeScript.GeneratedContracts ?? string.Empty,
                 TypeScript.ExtraMessageIds ?? string.Empty,
                 TypeScript.Routes ?? string.Empty);
@@ -357,6 +360,7 @@ public sealed class GameCoordinatorAppManifest
 public sealed class GameCoordinatorProtoContractOptions
 {
     public List<GameCoordinatorProtoContractSource> Sources { get; set; } = new();
+    public List<string> PreferredNamespaces { get; set; } = new();
 }
 
 public sealed class GameCoordinatorProtoContractSource

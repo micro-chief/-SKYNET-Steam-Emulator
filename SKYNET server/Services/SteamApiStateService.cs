@@ -42,6 +42,8 @@ public sealed partial class SteamApiStateService
     private readonly DotaGuildStore _dotaGuildStore;
     private readonly DotaDB _dotaDb;
     private readonly DotaDedicatedServerSupervisor _dotaDedicatedServers;
+    // SKYNET_DEADLOCK_DEDICATED_STATE_SERVICE_V1
+    private readonly DeadlockDedicatedServerSupervisor _deadlockDedicatedServers;
     private readonly GameServerSettingsService _gameServerSettings;
     private readonly GameCatalogService _gameCatalog;
     private readonly GameAchievementCatalogService _achievementCatalog;
@@ -67,6 +69,7 @@ public sealed partial class SteamApiStateService
         GameCoordinatorTraceService gameCoordinatorTrace,
         IConfiguration configuration,
         DotaDedicatedServerSupervisor dotaDedicatedServers,
+        DeadlockDedicatedServerSupervisor deadlockDedicatedServers,
         GameServerSettingsService gameServerSettings,
         GameCatalogService gameCatalog,
         GameAchievementCatalogService achievementCatalog,
@@ -80,6 +83,7 @@ public sealed partial class SteamApiStateService
         _gameCoordinatorPlugins = gameCoordinatorPlugins;
         _gameCoordinatorTrace = gameCoordinatorTrace;
         _dotaDedicatedServers = dotaDedicatedServers;
+        _deadlockDedicatedServers = deadlockDedicatedServers;
         _gameServerSettings = gameServerSettings;
         _gameCatalog = gameCatalog;
         _achievementCatalog = achievementCatalog;
@@ -137,6 +141,9 @@ public sealed partial class SteamApiStateService
         DotaGcRuntimeServices.UserOnlineProvider = IsOnlineDotaUser;
         DotaGcRuntimeServices.GameServerConnectIpResolver = ResolveDotaGameServerConnectIp;
         DotaGcRuntimeServices.GameServerConnectIpsResolver = ResolveDotaGameServerConnectIps;
+        // SKYNET_DEADLOCK_PER_CLIENT_CONNECT_IP_V29_WIRE
+        DeadlockGcRuntimeServices.ClientConnectIpResolver =
+            ResolveDeadlockGameServerConnectIp;
         DotaGcRuntimeServices.GameServerChangeRequested = EnqueueGameServerChangeRequestedEvent;
         DotaGcRuntimeServices.DedicatedServerStart = (lobbyId, map) => _dotaDedicatedServers.Start(lobbyId, map);
         DotaGcRuntimeServices.DedicatedServerClaim = (gameServerSteamId, port) => _dotaDedicatedServers.ClaimLobby(gameServerSteamId, port);

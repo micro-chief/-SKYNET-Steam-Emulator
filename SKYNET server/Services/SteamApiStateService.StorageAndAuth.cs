@@ -313,7 +313,9 @@ public sealed partial class SteamApiStateService
 
             _state.GameServers[serverId] = server;
             _gameServerLeases[serverId] = DateTime.UtcNow;
+            // SKYNET_DEADLOCK_DEDICATED_REGISTRATION_V1
             _dotaDedicatedServers.ObserveRegistration(serverId, server);
+            _deadlockDedicatedServers.ObserveRegistration(serverId, server);
             SaveState();
             return new ApiGameServerResult { Success = true, PublicIP = publicIp, Secure = secure, SteamId = serverId };
         }
@@ -359,6 +361,7 @@ public sealed partial class SteamApiStateService
             _state.GameServers[serverId] = server;
             _gameServerLeases[serverId] = DateTime.UtcNow;
             _dotaDedicatedServers.ObserveRegistration(serverId, server);
+            _deadlockDedicatedServers.ObserveRegistration(serverId, server);
             SaveState();
             return true;
         }
@@ -478,6 +481,7 @@ public sealed partial class SteamApiStateService
             _state.GameServers[server.SteamId] = server;
             _gameServerLeases[server.SteamId] = DateTime.UtcNow;
             _dotaDedicatedServers.ObserveRegistration(server.SteamId, server);
+            _deadlockDedicatedServers.ObserveRegistration(server.SteamId, server);
             return true;
         }
     }
@@ -716,6 +720,13 @@ public sealed partial class SteamApiStateService
                 return null;
             }
 
+            // Keep the route observed on live GC traffic authoritative. A user
+            // may start locally and later reconnect through LAN/Radmin.
+            if (!string.IsNullOrWhiteSpace(clientIp))
+            {
+                session!.RemoteIp = clientIp;
+            }
+
             var contextSteamId = request.SteamId != 0 ? request.SteamId : session!.SteamId;
             _state.Users.TryGetValue(contextSteamId, out var user);
             _state.Users.TryGetValue(session!.SteamId, out var sessionUser);
@@ -724,6 +735,7 @@ public sealed partial class SteamApiStateService
             {
                 AppId = appId,
                 SteamId = contextSteamId,
+                SessionSteamId = session!.SteamId,
                 AccountId = SteamIdToAccountId(contextSteamId),
                 PersonaName = user?.PersonaName ?? sessionUser?.PersonaName ?? string.Empty,
                 ClientIp = clientIp ?? string.Empty
@@ -742,6 +754,11 @@ public sealed partial class SteamApiStateService
                 return null;
             }
 
+            if (!string.IsNullOrWhiteSpace(clientIp))
+            {
+                session!.RemoteIp = clientIp;
+            }
+
             var contextSteamId = request.SteamId != 0 ? request.SteamId : session!.SteamId;
             _state.Users.TryGetValue(contextSteamId, out var user);
             _state.Users.TryGetValue(session!.SteamId, out var sessionUser);
@@ -750,6 +767,7 @@ public sealed partial class SteamApiStateService
             {
                 AppId = appId,
                 SteamId = contextSteamId,
+                SessionSteamId = session!.SteamId,
                 AccountId = SteamIdToAccountId(contextSteamId),
                 PersonaName = user?.PersonaName ?? sessionUser?.PersonaName ?? string.Empty,
                 ClientIp = clientIp ?? string.Empty

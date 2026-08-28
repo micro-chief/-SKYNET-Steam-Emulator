@@ -28,6 +28,13 @@ export function getCurrentDeadlockPartyState(): any {
     return currentDeadlockPartyState;
 }
 
+export function setCurrentDeadlockPartyState(
+    party: any
+): void {
+    currentDeadlockPartyState =
+        party;
+}
+
 export function clearCurrentDeadlockPartyState(): void {
     currentDeadlockPartyState =
         null;

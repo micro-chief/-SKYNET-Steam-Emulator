@@ -754,6 +754,15 @@ function mutate(
         actionId ===
         PartyAction.SetBotDifficulty
     ) {
+        // SKYNET_DEADLOCK_CUSTOM_SWITCHES_V19
+        // Current custom-lobby UI: 0=None, 1=Easy, 2=Medium, 3=Hard.
+        if (
+            uintValue < 0 ||
+            uintValue > 3
+        ) {
+            return false;
+        }
+
         party.bot_difficulty =
             uintValue;
 
@@ -834,6 +843,14 @@ function mutate(
         actionId ===
         PartyAction.SetPrivateLobbyGameMode
     ) {
+        // The custom-lobby UI exposes only Normal (1) and StreetBrawl (4).
+        if (
+            uintValue !== 1 &&
+            uintValue !== 4
+        ) {
+            return false;
+        }
+
         party.game_mode =
             uintValue;
 

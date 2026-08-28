@@ -1,0 +1,144 @@
+import { Route } from "../framework/gc";
+
+import {
+    getCurrentDeadlockPartyState
+} from "./RequestDeadlockPartyCreate";
+
+const GS_ENTER_MATCHMAKING =
+    10023;
+
+const GS_ALLOCATE_FOR_MATCH =
+    10021;
+
+let lastAllocatedServerSteamId =
+    0n;
+
+let lastAllocatedMatchId =
+    0n;
+
+/*
+ * CMsgServerToGCEnterMatchmaking field #1:
+ * server_version = uint32.
+ *
+ * CMsgClientHello field #1:
+ * version = uint32.
+ *
+ * Therefore it is sufficient as a temporary
+ * wire-compatible decoder for the readiness probe.
+ */
+export const RequestDeadlockServerEnterMatchmakingRawRoute: Route = {
+    requestId:
+        GS_ENTER_MATCHMAKING,
+
+    request: {
+        name:
+            "CMsgClientHello"
+    },
+
+    responseId:
+        GS_ENTER_MATCHMAKING,
+
+    response: {
+        name:
+            "CMsgClientWelcome"
+    }
+};
+
+export function requestDeadlockServerEnterMatchmakingRaw(
+    ctx: any
+): boolean {
+    const serverSteamId =
+        ctx.steamId;
+
+    const serverVersion =
+        ctx.request.version ?? 0;
+
+    log(
+        "[10023-GS] ========================================"
+    );
+
+    log(
+        "[10023-GS] EnterMatchmaking received"
+    );
+
+    log(
+        "[10023-GS] steamId=" +
+        serverSteamId
+    );
+
+    log(
+        "[10023-GS] server_version=" +
+        serverVersion
+    );
+
+    const party =
+        getCurrentDeadlockPartyState();
+
+    if (!party) {
+        log(
+            "[10023-GS] SKIP: no current party"
+        );
+
+        return true;
+    }
+
+    const matchId =
+        party.party_id ?? 0n;
+
+    if (matchId == 0n) {
+        log(
+            "[10023-GS] SKIP: match_id=0"
+        );
+
+        return true;
+    }
+
+    log(
+        "[10023-GS] match_id=" +
+        matchId
+    );
+
+    if (
+        lastAllocatedServerSteamId == serverSteamId &&
+        lastAllocatedMatchId == matchId
+    ) {
+        log(
+            "[10023-GS] duplicate; allocation already sent"
+        );
+
+        return true;
+    }
+
+    /*
+     * 10021:
+     * CMsgGCToServerAllocateForMatch
+     * uint64 match_id = 1.
+     *
+     * Existing CMsgClientToGCGetMatchMetaData has
+     * the same field #1 uint64 wire representation.
+     */
+    ctx.send(
+        GS_ALLOCATE_FOR_MATCH,
+        "CMsgClientToGCGetMatchMetaData",
+        {
+            match_id:
+                matchId
+        }
+    );
+
+    lastAllocatedServerSteamId =
+        serverSteamId;
+
+    lastAllocatedMatchId =
+        matchId;
+
+    log(
+        "[10023-GS] READY -> queued 10021 AllocateForMatch"
+    );
+
+    log(
+        "[10023-GS] sequence=10023->10021"
+    );
+
+    return true;
+}

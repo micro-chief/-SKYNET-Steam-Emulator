@@ -22,7 +22,33 @@ class GcHandlerContext implements HandlerContext {
 
     constructor(route: Route) {
         this.route = route;
-        this.request = decode(route.request.name, body());
+        // === SKYNET_GC_RAW_REQUEST_V1 ===
+        //
+        // Some GameServer messages are not present in the
+        // local generated TypeScript/C# contract set yet.
+        //
+        // A route may opt into RAW protobuf body access by
+        // declaring request.name = "__SKYNET_RAW_PROTO__".
+        //
+        // All normal routes continue through decode() exactly
+        // as before.
+        const requestBody =
+            body();
+
+        if (
+            route.request.name ===
+            "__SKYNET_RAW_PROTO__"
+        ) {
+            this.request =
+                requestBody;
+        }
+        else {
+            this.request =
+                decode(
+                    route.request.name,
+                    requestBody
+                );
+        }
         this.steamId = steamId();
         this.accountId = accountId();
     }

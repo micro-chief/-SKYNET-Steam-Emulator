@@ -1,4 +1,8 @@
 import {
+    requestDeadlockLeaveLobbyRaw
+} from "./modules/RequestDeadlockLeaveLobbyRaw";
+
+import {
     RequestDeadlockPartySetReadyStateRoute,
     requestDeadlockPartySetReadyState
 } from "./modules/RequestDeadlockPartySetReadyState";
@@ -123,7 +127,78 @@ import {
     requestDeadlockPartyStartMatch
 } from "./modules/RequestDeadlockPartyStartMatch";
 
+
+// === SKYNET_DEADLOCK_GS_ALLOCATE_RAW_10022_REGISTER_V4_IMPORT ===
+
+// === SKYNET_GS_ALLOCATE_10022_V4_IMPORT ===
+import {
+    RequestDeadlockAllocateForMatchResponseRawRoute,
+    requestDeadlockAllocateForMatchResponseRaw
+} from "./modules/RequestDeadlockAllocateForMatchResponseRaw";
+
+
+// === SKYNET_GS_10023_RAW_V53_IMPORT ===
+import {
+    requestDeadlockServerEnterMatchmakingRaw
+} from "./modules/RequestDeadlockServerEnterMatchmakingRaw";
+
+// === SKYNET_GS_HERO_DATA_10044_V1_IMPORT ===
+import {
+    requestDeadlockPlayerHeroDataRaw
+} from "./modules/RequestDeadlockPlayerHeroDataRaw";
+
+import { requestDeadlockMatchSignoutPermissionRaw } from "./modules/RequestDeadlockMatchSignoutPermissionRaw";
+import { requestDeadlockMatchSignoutRaw } from "./modules/RequestDeadlockMatchSignoutRaw";
+// === SKYNET_RAW_10025_LOBBY_STATE_V1_IMPORT ===
+import {
+    requestDeadlockUpdateLobbyServerStateRaw
+} from "./modules/RequestDeadlockUpdateLobbyServerStateRaw";
+
 export function handle(): boolean {
+    // === SKYNET_RAW_10012_SIGNOUT_PERMISSION_BEGIN ===
+    if (requestDeadlockMatchSignoutPermissionRaw()) {
+        return true;
+    }
+    // === SKYNET_RAW_10012_SIGNOUT_PERMISSION_END ===
+
+    // === SKYNET_RAW_10014_MATCH_SIGNOUT_BEGIN ===
+    if (requestDeadlockMatchSignoutRaw()) {
+        return true;
+    }
+    // === SKYNET_RAW_10014_MATCH_SIGNOUT_END ===
+
+    // === SKYNET_RAW_10025_LOBBY_STATE_V1_BEGIN ===
+    if (
+        requestDeadlockUpdateLobbyServerStateRaw()
+    ) {
+        return true;
+    }
+    // === SKYNET_RAW_10025_LOBBY_STATE_V1_END ===
+
+    // === SKYNET_GS_10023_RAW_V53_GATE_BEGIN ===
+    if (
+        messageType() == 10023
+    ) {
+        return requestDeadlockServerEnterMatchmakingRaw();
+    }
+    // === SKYNET_GS_10023_RAW_V53_GATE_END ===
+    // === SKYNET_GS_HERO_DATA_10044_V1_GATE_BEGIN ===
+    // SKYNET_DEADLOCK_LEAVE_MATCH_9015_RAW_V1
+    if (
+        messageType() ==
+        9015
+    ) {
+        return requestDeadlockLeaveLobbyRaw();
+    }
+
+    if (
+        messageType() == 10044
+    ) {
+        return requestDeadlockPlayerHeroDataRaw();
+    }
+    // === SKYNET_GS_HERO_DATA_10044_V1_GATE_END ===
+
+
     gc.on(
         RequestDeadlockPartyCreateRoute,
         requestDeadlockPartyCreate
@@ -203,6 +278,9 @@ export function handle(): boolean {
         requestGameServerHello
     );
 
+    // === SKYNET_DEADLOCK_GS_ALLOCATE_RAW_10022_REGISTER_V4_REGISTER ===
+
+
     gc.on(
         RequestDeadlockGetActiveMatchesRoute,
         requestDeadlockGetActiveMatches
@@ -252,8 +330,17 @@ export function handle(): boolean {
         RequestDeadlockHeroReleaseVoteTallyRoute,
         requestDeadlockHeroReleaseVoteTally
     );
+    // === SKYNET_GS_ALLOCATE_RAW_10022_V3_REGISTER_BEGIN ===
+// === SKYNET_GS_ALLOCATE_RAW_10022_V3_REGISTER_END ===
 
-    return gc.dispatch();
+
+    // === SKYNET_GS_ALLOCATE_10022_V4_REGISTER_BEGIN ===
+    gc.on(
+        RequestDeadlockAllocateForMatchResponseRawRoute,
+        requestDeadlockAllocateForMatchResponseRaw
+    );
+    // === SKYNET_GS_ALLOCATE_10022_V4_REGISTER_END ===
+        return gc.dispatch();
 }
 
 export function tick(): void {

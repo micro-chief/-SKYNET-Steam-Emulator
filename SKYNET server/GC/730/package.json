@@ -1,0 +1,14 @@
+{
+  "private": true,
+  "name": "gc-730-scripts",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "npm run typecheck",
+    "generate": "powershell -ExecutionPolicy Bypass -File ../tools/generate-contracts.ps1 -AppId 730"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0"
+  }
+}

@@ -4,6 +4,7 @@
     "entryPoint": "main.ts",
     "hostServices": ["dota"],
     "protoContracts": {
+        "preferredNamespaces": [""],
         "sources": [
             {
                 "assembly": "server"

@@ -6,6 +6,11 @@ import {
     getCurrentDeadlockPartyState
 } from "./RequestDeadlockPartyCreate";
 
+// SKYNET_DEADLOCK_EPHEMERAL_MATCH_LOBBY_V1_START
+import {
+    beginDeadlockMatchLobby
+} from "./DeadlockMatchLobbyState";
+
 // === SKYNET_MATCH_FOUND_ARM_IMPORT_V1 ===
 import {
     armDeadlockMatchFound
@@ -81,6 +86,19 @@ export function requestDeadlockPartyStartMatch(
                 0
         });
 
+        return true;
+    }
+
+    const matchLobbyId =
+        beginDeadlockMatchLobby(
+            party.party_id
+        );
+
+    if (
+        matchLobbyId ===
+        0n
+    ) {
+        log("[9131-DS] ABORT match lobby allocation failed");
         return true;
     }
 
@@ -252,6 +270,141 @@ log(
         account_id:
             0
     });
+
+    // === SKYNET_DEADLOCK_9131_START_DEDICATED_V2_BEGIN ===
+
+    /*
+     * Preserve official/local working GC ordering:
+     *
+     *   9131
+     *     -> 26 Party SO
+     *     -> 9132
+     *
+     * Only AFTER 9132 do we request a real dedicated allocation.
+     *
+     * The C# DeadlockDedicatedServerSupervisor is idempotent
+     * for the same party/lobby id.
+     *
+     * No MatchFound emit here yet.
+     * No 9100 here yet.
+     * No CSOCitadelLobby type_id=101 here yet.
+     */
+
+    // SKYNET_DEADLOCK_CONDITIONAL_BOTS_V1_PARTY
+    // The official captured bot match retained bot_difficulty=3.
+    // Zero is the strict no-bot path.
+    const requestedBotDifficulty =
+        party.bot_difficulty ??
+        0;
+
+    const botDifficulty =
+        requestedBotDifficulty >= 1 &&
+        requestedBotDifficulty <= 3
+            ? requestedBotDifficulty
+            : 0;
+
+    const botMatch =
+        botDifficulty > 0;
+
+    // SKYNET_DEADLOCK_CUSTOM_SWITCHES_V19
+    const requestedGameMode =
+        party.game_mode ??
+        party.gameMode ??
+        1;
+
+    const gameMode =
+        requestedGameMode === 4
+            ? 4
+            : 1;
+
+    // SKYNET_DEADLOCK_STREET_BRAWL_MIDTOWN_V20
+    // Street Brawl is a ruleset on the current Midtown map. dl_streets is
+    // the retained legacy four-lane map, not the current Brawl battlefield.
+    const dedicatedMap =
+        "dl_midtown";
+
+    const privateSettings =
+        party.private_lobby_settings ??
+        party.privateLobbySettings;
+
+    const randomizeLanes =
+        privateSettings != null &&
+        (
+            privateSettings.randomize_lanes ??
+            privateSettings.randomizeLanes ??
+            false
+        ) === true;
+
+    // SKYNET_DEADLOCK_CONDITIONAL_BOTS_V11_TYPESHARP
+    log(
+        "[9131-DS] start request party_id=" +
+        party.party_id +
+        " match_lobby_id=" +
+        matchLobbyId +
+        " game_mode=" +
+        gameMode +
+        " map=" +
+        dedicatedMap +
+        " bot_difficulty=" +
+        botDifficulty
+    );
+
+    if (randomizeLanes) {
+        log("[9131-DS] lanes=standard");
+    }
+    else {
+        log("[9131-DS] lanes=manual");
+    }
+
+    if (botMatch) {
+        log("[9131-DS] bots=true");
+    }
+    else {
+        log("[9131-DS] bots=false");
+    }
+
+    const dedicatedLaunch: any =
+        deadlockStartDedicatedServer(
+            matchLobbyId,
+            dedicatedMap,
+            botDifficulty
+        );
+
+    if (
+        dedicatedLaunch == null
+    ) {
+        log(
+            "[9131-DS] host returned null"
+        );
+    }
+    else {
+        log(
+            "[9131-DS] started=" +
+            dedicatedLaunch.started
+        );
+
+        log(
+            "[9131-DS] port=" +
+            dedicatedLaunch.port
+        );
+
+        log(
+            "[9131-DS] state=" +
+            dedicatedLaunch.state
+        );
+
+        log(
+            "[9131-DS] error='" +
+            (
+                dedicatedLaunch.error ??
+                ""
+            ) +
+            "'"
+        );
+    }
+
+    // === SKYNET_DEADLOCK_9131_START_DEDICATED_V2_END ===
+
 
     
 

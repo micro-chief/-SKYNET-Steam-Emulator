@@ -1,0 +1,67 @@
+import {
+    HandlerContext,
+    encodeProto
+} from "../framework/gc";
+
+import {
+    getCurrentDeadlockPartyState
+} from "./RequestDeadlockPartyCreate";
+
+import {
+    CMsgClientHello,
+    CMsgClientWelcome,
+    GcRoute,
+    ProtoDescriptor,
+} from "../generated/protobuf";
+
+const requestProto = {
+    name: "CMsgClientHello",
+} as ProtoDescriptor<CMsgClientHello>;
+
+const responseProto = {
+    name: "CMsgClientWelcome",
+} as ProtoDescriptor<CMsgClientWelcome>;
+
+const GS_ALLOCATE_FOR_MATCH =
+    10021;
+
+export const RequestGameServerHelloRoute = {
+    requestId: 4007,
+    request: requestProto,
+    responseId: 4005,
+    response: responseProto,
+} as GcRoute<
+    CMsgClientHello,
+    CMsgClientWelcome
+>;
+
+export function requestGameServerHello(
+    ctx: HandlerContext<
+        CMsgClientHello,
+        CMsgClientWelcome
+    >,
+): boolean {
+    log(
+        "[4007-GS] ========================================"
+    );
+
+    log(
+        "[4007-GS] GameServerHello steamId=" +
+        ctx.steamId
+    );
+
+    ctx.reply({
+        version:
+            ctx.request.version ?? 1,
+    });
+
+    log(
+        "[4007-GS] queued 4005 GameServerWelcome"
+    );
+
+    log(
+        "[4007-GS] waiting for 10023 EnterMatchmaking"
+    );
+
+    return true;
+}

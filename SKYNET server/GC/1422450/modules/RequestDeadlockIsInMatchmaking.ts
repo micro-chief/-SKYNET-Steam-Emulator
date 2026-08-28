@@ -6,6 +6,10 @@ import {
     ProtoDescriptor
 } from "../generated/protobuf";
 
+import {
+    getCurrentDeadlockPartyState
+} from "./RequestDeadlockPartyCreate";
+
 const requestProto = {
     name:
         "SKYNET.Server.GameCoordinator.Citadel.CMsgClientToGCIsInMatchmaking"
@@ -38,16 +42,19 @@ export const RequestDeadlockIsInMatchmakingRoute = {
 export function requestDeadlockIsInMatchmaking(
     ctx: any
 ): boolean {
-    /*
-     * Temporary state until DB-backed matchmaking session storage
-     * is implemented.
-     *
-     * For now the client must remain in matchmaking after 9010.
-     */
+    const party =
+        getCurrentDeadlockPartyState();
+
+    const matchmakingStartTime =
+        party == null
+            ? 0
+            : party.match_making_start_time ??
+                0;
 
     ctx.reply({
         in_matchmaking:
-            true
+            matchmakingStartTime >
+            0
     });
 
     return true;

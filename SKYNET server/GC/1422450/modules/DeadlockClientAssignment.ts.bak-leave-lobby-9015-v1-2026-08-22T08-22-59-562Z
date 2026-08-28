@@ -1,0 +1,499 @@
+// SKYNET_DEADLOCK_CLIENT_ASSIGN_TYPESHARP_GLOBALS_V113
+import {
+    encodeProto
+} from "../framework/gc";
+
+import {
+    getCurrentDeadlockPartyState
+} from "./RequestDeadlockPartyCreate";
+
+// SKYNET_DEADLOCK_CLIENT_ASSIGN_HELPER_V111
+
+const LOBBY_SO_TYPE_ID =
+    101;
+
+const PARTY_SO_TYPE_ID =
+    105;
+
+const SERVER_VERSION =
+    6677;
+
+const LOOPBACK_CONNECT_IP =
+    2130706433;
+
+function queueForAccount(
+    accountId: number,
+    messageType: number,
+    payload: any
+): boolean {
+    return deadlockQueueGcMessageForAccount(
+        accountId,
+        messageType,
+        payload,
+        true
+    );
+}
+
+export function emitDeadlockClientAssignment(
+    serverSteamId: bigint,
+    serverPort: number
+): boolean {
+    const party =
+        getCurrentDeadlockPartyState();
+
+    if (
+        !party
+    ) {
+        log(
+            "[CLIENT-ASSIGN] skipped: Party missing"
+        );
+
+        return false;
+    }
+
+    /*
+     * party_id and ctx.steamId already enter the GC runtime
+     * as bigint values.
+     *
+     * No number-to-bigint conversion is performed here.
+     */
+    const partyId: bigint =
+        party.party_id;
+
+    if (
+        partyId ===
+        0n
+    ) {
+        log(
+            "[CLIENT-ASSIGN] skipped: party_id=0"
+        );
+
+        return false;
+    }
+
+    const members =
+        party.members ??
+        [];
+
+    if (
+        members.length ===
+        0
+    ) {
+        log(
+            "[CLIENT-ASSIGN] skipped: members empty"
+        );
+
+        return false;
+    }
+
+    const matchMode =
+        party.match_mode ??
+        2;
+
+    const gameMode =
+        party.game_mode ??
+        1;
+
+    const assignLobby = {
+        lobby_id:
+            partyId,
+
+        match_id:
+            partyId,
+
+        match_mode:
+            matchMode,
+
+        game_mode:
+            gameMode,
+
+        compatibility_version:
+            SERVER_VERSION,
+
+        server_steam_id:
+            serverSteamId,
+
+        server_state:
+            0,
+
+        udp_connect_ip:
+            LOOPBACK_CONNECT_IP,
+
+        udp_connect_port:
+            serverPort,
+
+        server_version:
+            SERVER_VERSION,
+
+        safe_to_abandon:
+            true,
+
+        match_punishes_abandons:
+            false,
+
+        game_mode_version:
+            2
+    };
+
+    const activeLobby = {
+        lobby_id:
+            partyId,
+
+        match_id:
+            partyId,
+
+        match_mode:
+            matchMode,
+
+        game_mode:
+            gameMode,
+
+        compatibility_version:
+            SERVER_VERSION,
+
+        server_steam_id:
+            serverSteamId,
+
+        server_state:
+            1,
+
+        udp_connect_ip:
+            LOOPBACK_CONNECT_IP,
+
+        udp_connect_port:
+            serverPort,
+
+        server_version:
+            SERVER_VERSION,
+
+        safe_to_abandon:
+            true,
+
+        match_punishes_abandons:
+            false,
+
+        game_mode_version:
+            2
+    };
+
+    const assignLobbyBytes =
+        encodeProto(
+            "SKYNET.Server.GameCoordinator.Citadel.CSOCitadelLobby",
+            assignLobby
+        );
+
+    const activeLobbyBytes =
+        encodeProto(
+            "SKYNET.Server.GameCoordinator.Citadel.CSOCitadelLobby",
+            activeLobby
+        );
+
+    const lobbyOwner = {
+        type:
+            3,
+
+        id:
+            partyId
+    };
+
+    const syncVersion =
+        partyId +
+        4001n;
+
+    /*
+     * type101 phase 1:
+     *
+     * empty SO subscription.
+     */
+    const emptyLobbyCache = {
+        version:
+            partyId +
+            4000n,
+
+        owner_soid:
+            lobbyOwner,
+
+        service_list: [
+            1
+        ],
+
+        sync_version:
+            syncVersion
+    };
+
+    /*
+     * type101 phase 2:
+     *
+     * full SO snapshot with server_state Assign.
+     */
+    const fullLobbyCache = {
+        objects: [
+            {
+                type_id:
+                    LOBBY_SO_TYPE_ID,
+
+                object_data: [
+                    assignLobbyBytes
+                ]
+            }
+        ],
+
+        version:
+            partyId +
+            4002n,
+
+        owner_soid:
+            lobbyOwner,
+
+        service_id:
+            1,
+
+        service_list: [
+            0
+        ],
+
+        sync_version:
+            syncVersion
+    };
+
+    /*
+     * Clear client FindingMatch state.
+     */
+    party.match_making_start_time =
+        undefined;
+
+    const partyBytes =
+        encodeProto(
+            "SKYNET.Server.GameCoordinator.Citadel.CSOCitadelParty",
+            party
+        );
+
+    const partyUpdate = {
+        objects_modified: [
+            {
+                type_id:
+                    PARTY_SO_TYPE_ID,
+
+                object_data:
+                    partyBytes
+            }
+        ],
+
+        objects_added:
+            [],
+
+        objects_removed:
+            [],
+
+        version:
+            partyId +
+            4003n,
+
+        owner_soid: {
+            type:
+                2,
+
+            id:
+                partyId
+        },
+
+        service_id:
+            1
+    };
+
+    /*
+     * type101 state transition:
+     *
+     * Assign -> Active.
+     */
+    const lobbyUpdate = {
+        objects_modified: [
+            {
+                type_id:
+                    LOBBY_SO_TYPE_ID,
+
+                object_data:
+                    activeLobbyBytes
+            }
+        ],
+
+        objects_added:
+            [],
+
+        objects_removed:
+            [],
+
+        version:
+            partyId +
+            4004n,
+
+        owner_soid:
+            lobbyOwner,
+
+        service_id:
+            1
+    };
+
+    const emptyLobbyCacheBytes =
+        encodeProto(
+            "CMsgSOCacheSubscribed",
+            emptyLobbyCache
+        );
+
+    const fullLobbyCacheBytes =
+        encodeProto(
+            "CMsgSOCacheSubscribed",
+            fullLobbyCache
+        );
+
+    const partyUpdateBytes =
+        encodeProto(
+            "CMsgSOMultipleObjects",
+            partyUpdate
+        );
+
+    const lobbyUpdateBytes =
+        encodeProto(
+            "CMsgSOMultipleObjects",
+            lobbyUpdate
+        );
+
+    log(
+        "[CLIENT-ASSIGN] ========================================"
+    );
+
+    log(
+        "[CLIENT-ASSIGN] party_id=" +
+        partyId
+    );
+
+    log(
+        "[CLIENT-ASSIGN] server_steam_id=" +
+        serverSteamId
+    );
+
+    log(
+        "[CLIENT-ASSIGN] direct=127.0.0.1:" +
+        serverPort
+    );
+
+    log(
+        "[CLIENT-ASSIGN] assign.bytes=" +
+        assignLobbyBytes.length
+    );
+
+    log(
+        "[CLIENT-ASSIGN] active.bytes=" +
+        activeLobbyBytes.length
+    );
+
+    let targets =
+        0;
+
+    let failed =
+        0;
+
+    for (
+        let i = 0;
+        i < members.length;
+        i++
+    ) {
+        const member =
+            members[i];
+
+        const accountId =
+            member.account_id ??
+            0;
+
+        if (
+            accountId <=
+            0
+        ) {
+            log(
+                "[CLIENT-ASSIGN] member[" +
+                i +
+                "] skipped account_id=" +
+                accountId
+            );
+
+            continue;
+        }
+
+        const q1 =
+            queueForAccount(
+                accountId,
+                24,
+                emptyLobbyCacheBytes
+            );
+
+        const q2 =
+            queueForAccount(
+                accountId,
+                24,
+                fullLobbyCacheBytes
+            );
+
+        const q3 =
+            queueForAccount(
+                accountId,
+                26,
+                partyUpdateBytes
+            );
+
+        const q4 =
+            queueForAccount(
+                accountId,
+                26,
+                lobbyUpdateBytes
+            );
+
+        targets++;
+
+        if (
+            !q1 ||
+            !q2 ||
+            !q3 ||
+            !q4
+        ) {
+            failed++;
+        }
+
+        log(
+            "[CLIENT-ASSIGN] member[" +
+            i +
+            "] account_id=" +
+            accountId
+        );
+
+        log(
+            "[CLIENT-ASSIGN] member[" +
+            i +
+            "] queue=" +
+            q1 +
+            "," +
+            q2 +
+            "," +
+            q3 +
+            "," +
+            q4
+        );
+    }
+
+    log(
+        "[CLIENT-ASSIGN] sequence=24(empty)->24(type101 assign)->26(party clear MM)->26(type101 active)"
+    );
+
+    log(
+        "[CLIENT-ASSIGN] targets=" +
+        targets +
+        " failed=" +
+        failed
+    );
+
+    return (
+        targets >
+        0 &&
+        failed ===
+        0
+    );
+}

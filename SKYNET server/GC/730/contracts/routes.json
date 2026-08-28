@@ -1,0 +1,100 @@
+[
+  {
+    "name": "ClientHello",
+    "requestMessage": "GCClientHello",
+    "requestProto": "Cs2ClientHello",
+    "responseMessage": "GCClientWelcome",
+    "responseProto": "Cs2ClientWelcome"
+  },
+  {
+    "name": "MatchmakingHello",
+    "requestMessage": "MatchmakingClient2GCHello",
+    "requestProto": "CMsgGCCStrike15_v2_MatchmakingClient2GCHello",
+    "responseMessage": "MatchmakingGC2ClientHello",
+    "responseProto": "CMsgGCCStrike15_v2_MatchmakingGC2ClientHello"
+  },
+  {
+    "name": "RequestPlayersProfile",
+    "requestMessage": "ClientRequestPlayersProfile",
+    "requestProto": "CMsgGCCStrike15_v2_ClientRequestPlayersProfile",
+    "responseMessage": "PlayersProfile",
+    "responseProto": "CMsgGCCStrike15_v2_PlayersProfile"
+  },
+  {
+    "name": "TournamentGames",
+    "requestMessage": "MatchListRequestTournamentGames",
+    "requestProto": "CMsgGCCStrike15_v2_MatchListRequestTournamentGames",
+    "responseMessage": "MatchList",
+    "responseProto": "CMsgGCCStrike15_v2_MatchList"
+  },
+  {
+    "name": "RankUpdate",
+    "requestMessage": "ClientGCRankUpdate",
+    "requestProto": "CMsgGCCStrike15_v2_ClientGCRankUpdate",
+    "responseMessage": "ClientGCRankUpdate",
+    "responseProto": "CMsgGCCStrike15_v2_ClientGCRankUpdate"
+  },
+  {
+    "name": "VolatileShop",
+    "requestMessage": "VolatileShopSubscribe",
+    "requestProto": "CMsgGCCStrike15_v2_VolatileShopSubscribe",
+    "responseMessage": "VolatileShopSubscribe",
+    "responseProto": "CMsgGCCStrike15_v2_VolatileShopSubscribe"
+  },
+  {
+    "name": "RecurringMissionSchedule",
+    "requestMessage": "RequestRecurringMissionSchedule",
+    "requestProto": "CMsgRequestRecurringMissionSchedule",
+    "responseMessage": "RecurringMissionSchema",
+    "responseProto": "CMsgRecurringMissionSchema"
+  },
+  {
+    "name": "PremierSeasonSummary",
+    "requestMessage": "PremierSeasonSummary",
+    "requestProto": "CMsgGCCStrike15_v2_PremierSeasonSummary",
+    "responseMessage": "PremierSeasonSummary",
+    "responseProto": "CMsgGCCStrike15_v2_PremierSeasonSummary"
+  },
+  {
+    "name": "StoreUserData",
+    "requestMessage": "GCStoreGetUserData",
+    "requestProto": "CMsgStoreGetUserData",
+    "responseMessage": "GCStoreGetUserDataResponse",
+    "responseProto": "CMsgStoreGetUserDataResponse"
+  },
+  {
+    "name": "EventFavorites",
+    "requestMessage": "GetEventFavoritesRequest",
+    "requestProto": "CMsgGCCStrike15_v2_GetEventFavorites_Request",
+    "responseMessage": "GetEventFavoritesResponse",
+    "responseProto": "CMsgGCCStrike15_v2_GetEventFavorites_Response"
+  },
+  {
+    "name": "RecentUserGames",
+    "requestMessage": "MatchListRequestRecentUserGames",
+    "requestProto": "CMsgGCCStrike15_v2_MatchListRequestRecentUserGames",
+    "responseMessage": "MatchList",
+    "responseProto": "CMsgGCCStrike15_v2_MatchList"
+  },
+  {
+    "name": "AccountCoPlays",
+    "requestMessage": "AccountRequestCoPlays",
+    "requestProto": "CMsgGCCStrike15_v2_Account_RequestCoPlays",
+    "responseMessage": "AccountRequestCoPlays",
+    "responseProto": "CMsgGCCStrike15_v2_Account_RequestCoPlays"
+  },
+  {
+    "name": "PartySearch",
+    "requestMessage": "PartySearch",
+    "requestProto": "CMsgGCCStrike15_v2_Party_Search",
+    "responseMessage": "PartySearch",
+    "responseProto": "CMsgGCCStrike15_v2_Party_SearchResults"
+  },
+  {
+    "name": "TournamentPredictions",
+    "requestMessage": "MatchListRequestTournamentPredictions",
+    "requestProto": "Cs2TournamentPredictions",
+    "responseMessage": "MatchListRequestTournamentPredictions",
+    "responseProto": "Cs2TournamentPredictions"
+  }
+]

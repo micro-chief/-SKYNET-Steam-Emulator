@@ -21,7 +21,8 @@ internal static class InjectedProcessLauncher
         IReadOnlyList<string> arguments,
         string workingDirectory,
         IReadOnlyDictionary<string, string> environment,
-        bool showWindow)
+        bool showWindow,
+        bool isolateDesktop = false)
     {
         if (!OperatingSystem.IsWindows())
         {
@@ -38,9 +39,51 @@ internal static class InjectedProcessLauncher
             throw new FileNotFoundException("Injection payload DLL not found.", payloadDllPath);
         }
 
+        // SKYNET_DEADLOCK_DEDICATED_ISOLATED_DESKTOP_V20
+        // STARTF_USESHOWWINDOW is advisory for GUI applications: Source 2 can
+        // create and activate another window after startup. A hidden dedicated
+        // therefore runs on a private, non-input desktop whose windows cannot
+        // become foreground on the user's desktop.
+        IntPtr desktopHandle =
+            IntPtr.Zero;
+
+        string? desktopName =
+            null;
+
+        if (isolateDesktop)
+        {
+            desktopName =
+                "SKYNET.Dedicated." +
+                Environment.ProcessId +
+                "." +
+                Guid.NewGuid().ToString("N");
+
+            const uint desktopAllAccess =
+                0x000F01FF;
+
+            desktopHandle =
+                CreateDesktop(
+                    desktopName,
+                    IntPtr.Zero,
+                    IntPtr.Zero,
+                    0,
+                    desktopAllAccess,
+                    IntPtr.Zero
+                );
+
+            if (desktopHandle == IntPtr.Zero)
+            {
+                throw new Win32Exception(
+                    Marshal.GetLastWin32Error(),
+                    "CreateDesktop failed."
+                );
+            }
+        }
+
         var startupInfo = new STARTUPINFO
         {
             cb = Marshal.SizeOf<STARTUPINFO>(),
+            lpDesktop = desktopName,
             dwFlags = STARTF_USESHOWWINDOW,
             wShowWindow = showWindow ? SW_SHOWNORMAL : SW_HIDE
         };
@@ -73,7 +116,14 @@ internal static class InjectedProcessLauncher
             try
             {
                 InjectInto(processInfo.hProcess, payloadDllPath);
-                AllowSetForegroundWindow(processInfo.dwProcessId);
+                // SKYNET_DEADLOCK_DEDICATED_NO_FOCUS_V19
+                // A hidden dedicated process must never receive foreground
+                // activation permission. Keep the opt-in behavior only for
+                // explicitly visible diagnostic launches.
+                if (showWindow)
+                {
+                    AllowSetForegroundWindow(processInfo.dwProcessId);
+                }
                 if (ResumeThread(processInfo.hThread) == uint.MaxValue)
                 {
                     throw new Win32Exception(Marshal.GetLastWin32Error(), "ResumeThread failed.");
@@ -102,6 +152,11 @@ internal static class InjectedProcessLauncher
             if (processInfo.hProcess != IntPtr.Zero)
             {
                 CloseHandle(processInfo.hProcess);
+            }
+
+            if (desktopHandle != IntPtr.Zero)
+            {
+                CloseDesktop(desktopHandle);
             }
         }
     }
@@ -330,4 +385,16 @@ internal static class InjectedProcessLauncher
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool AllowSetForegroundWindow(uint processId);
+
+    [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    private static extern IntPtr CreateDesktop(
+        string lpszDesktop,
+        IntPtr lpszDevice,
+        IntPtr pDevmode,
+        uint dwFlags,
+        uint dwDesiredAccess,
+        IntPtr lpsa);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool CloseDesktop(IntPtr hDesktop);
 }

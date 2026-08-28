@@ -6,6 +6,9 @@ public sealed class GameCoordinatorContext
 {
     public uint AppId { get; init; }
     public ulong SteamId { get; init; }
+    // Authenticated HTTP-session owner. For a listen server SteamId is the
+    // game-server identity while this remains the local player's SteamID.
+    public ulong SessionSteamId { get; init; }
     public uint AccountId { get; init; }
     public string PersonaName { get; init; } = string.Empty;
 

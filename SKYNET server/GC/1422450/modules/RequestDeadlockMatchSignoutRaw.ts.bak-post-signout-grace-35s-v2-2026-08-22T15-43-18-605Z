@@ -1,0 +1,101 @@
+/*
+ * Deadlock 1422450
+ *
+ * RAW GameServer pre-dispatch:
+ *
+ *   10014 CMsgServerToGCMatchSignout
+ *      ->
+ *   10015 CMsgServerToGCMatchSignoutResponse
+ *
+ * Current protobuf:
+ *
+ * message CMsgServerToGCMatchSignoutResponse {
+ *     enum ESignoutResult {
+ *         k_ESignout_Failed_Retry = 1;
+ *         k_ESignout_Failed_NoRetry = 2;
+ *         k_ESignout_Failed_InFlight = 3;
+ *         k_ESignout_Success = 4;
+ *         k_ESignout_Success_AlreadySignedOut = 5;
+ *     }
+ *
+ *     optional ESignoutResult result = 1;
+ * }
+ *
+ * Minimal successful protobuf:
+ *
+ *   field 1 / varint / value 4
+ *   08 04
+ *
+ * Base64:
+ *   CAQ=
+ *
+ * IMPORTANT:
+ * 10014 is intentionally NOT decoded or persisted in V1.
+ * This experiment only completes the GameServer signout handshake.
+ */
+
+export function requestDeadlockMatchSignoutRaw(): boolean {
+    if (
+        messageType() !=
+        10014
+    ) {
+        return false;
+    }
+
+    log(
+        "[10014-GS] RAW MatchSignout received"
+    );
+
+    /*
+     * CMsgServerToGCMatchSignoutResponse
+     *
+     * result = k_ESignout_Success
+     *
+     * field 1 = 4
+     *
+     * protobuf:
+     *   08 04
+     */
+    const response = [
+        8,
+        4
+    ];
+
+    reply(
+        10015,
+        response,
+        true
+    );
+
+    // === SKYNET_DEADLOCK_10014_DELAYED_RELEASE_V1_BEGIN ===
+    //
+    // IMPORTANT:
+    // reply(10015) above only queues the HTTP response.
+    //
+    // Do NOT call synchronous deadlockReleaseDedicatedServer()
+    // here: that could kill the requester before 10015 reaches it.
+    //
+    // The C# host parses lobby_id directly from the current
+    // 10014 BodyBase64, verifies Supervisor ownership, then
+    // performs Release() after a short delay.
+    //
+    const releaseScheduled: any =
+        deadlockScheduleCurrentMatchSignoutRelease(
+            2000,
+            "match-signout-success"
+        );
+
+    log(
+        "[10014-GS] delayed dedicated release scheduled=" +
+        releaseScheduled +
+        " delay_ms=2000"
+    );
+
+    // === SKYNET_DEADLOCK_10014_DELAYED_RELEASE_V1_END ===
+
+    log(
+        "[10014-GS] replied 10015 result=Success(4) bytes=2"
+    );
+
+    return true;
+}

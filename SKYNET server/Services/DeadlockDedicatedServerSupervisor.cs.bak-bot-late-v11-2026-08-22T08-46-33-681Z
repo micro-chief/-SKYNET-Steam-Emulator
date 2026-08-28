@@ -1,0 +1,1218 @@
+// SKYNET_DEADLOCK_DEDICATED_CONSOLE_FLAGS_REMOVED_V163
+using System.Diagnostics;
+using System.Net;
+using System.Net.Sockets;
+using SKYNET_server.Models;
+
+namespace SKYNET_server.Services;
+
+// SKYNET_DEADLOCK_DEDICATED_SUPERVISOR_V1
+//
+// Deadlock-specific dedicated process supervisor.
+//
+// This deliberately does NOT reuse DotaDedicatedServerSupervisor state.
+// Dota and Deadlock reservations must remain isolated.
+//
+// Stage V1:
+//   * reserve a unique game port
+//   * launch deadlock.exe through the existing injected payload launcher
+//   * observe Steam GameServer registration
+//   * associate SteamID/IP/port with lobby_id
+//   * expose a stable snapshot to Deadlock GC
+//
+// SDR ticket generation is NOT handled here.
+
+public sealed class DeadlockDedicatedServerSupervisor : BackgroundService
+{
+    private readonly object _sync = new();
+
+    private readonly ILogger<DeadlockDedicatedServerSupervisor> _logger;
+
+    private readonly string _executablePath;
+    private readonly string _workingDirectory;
+    private readonly string _payloadDllPath;
+
+    private readonly bool _enabled;
+    private readonly bool _showWindow;
+
+    private readonly string _bindIp;
+    private readonly string _defaultMap;
+
+    private readonly int _portStart;
+
+    private readonly TimeSpan _startupTimeout;
+
+    private readonly Dictionary<ulong, DedicatedReservation> _reservations =
+        new();
+
+    public DeadlockDedicatedServerSupervisor(
+        IHostEnvironment environment,
+        IConfiguration configuration,
+        ILogger<DeadlockDedicatedServerSupervisor> logger)
+    {
+        _logger =
+            logger;
+
+        _enabled =
+            configuration.GetValue(
+                "GameCoordinator:Deadlock:Dedicated:Enabled",
+                true
+            );
+
+        _showWindow =
+            configuration.GetValue(
+                "GameCoordinator:Deadlock:Dedicated:ShowWindow",
+                false
+            ) /* SKYNET_DEADLOCK_DEDICATED_HEADLESS_V4 */;
+
+        _bindIp =
+            configuration.GetValue<string>(
+                "GameCoordinator:Deadlock:Dedicated:BindIp"
+            ) ??
+            "0.0.0.0";
+
+        _portStart =
+            Math.Clamp(
+                configuration.GetValue(
+                    "GameCoordinator:Deadlock:Dedicated:PortStart",
+                    27125
+                ),
+                1024,
+                65534
+            );
+
+        _defaultMap =
+            NormalizeMap(
+                configuration.GetValue<string>(
+                    "GameCoordinator:Deadlock:Dedicated:Map"
+                ) ??
+                "dl_midtown",
+                "dl_midtown"
+            );
+
+        _startupTimeout =
+            TimeSpan.FromSeconds(
+                Math.Clamp(
+                    configuration.GetValue(
+                        "GameCoordinator:Deadlock:Dedicated:StartupTimeoutSeconds",
+                        120
+                    ),
+                    10,
+                    300
+                )
+            );
+
+        // SKYNET_DEADLOCK_DEDICATED_EXECUTABLE_PATH_V1
+        _executablePath =
+            ResolvePath(
+                configuration.GetValue<string>(
+                    "GameCoordinator:Deadlock:Dedicated:ExecutablePath"
+                ),
+                environment.ContentRootPath,
+                @"C:\games\Deadlock\game\bin\win64\deadlock.exe"
+            );
+
+        _workingDirectory =
+            ResolvePath(
+                configuration.GetValue<string>(
+                    "GameCoordinator:Deadlock:Dedicated:WorkingDirectory"
+                ),
+                environment.ContentRootPath,
+                Path.GetDirectoryName(
+                    _executablePath
+                ) ??
+                environment.ContentRootPath
+            );
+
+        _payloadDllPath =
+            ResolvePath(
+                configuration.GetValue<string>(
+                    "GameCoordinator:Deadlock:Dedicated:PayloadDllPath"
+                ),
+                environment.ContentRootPath,
+                Path.Combine(
+                    "..",
+                    "SKYNET Steam Client",
+                    "payload",
+                    "x64",
+                    "steam_api64.dll"
+                )
+            );
+    }
+
+    public DedicatedLaunchResult Start(
+        ulong lobbyId,
+        string? requestedMap)
+    {
+        if (
+            lobbyId ==
+            0
+        )
+        {
+            return DedicatedLaunchResult.Failed(
+                "Lobby id is required."
+            );
+        }
+
+        lock (
+            _sync
+        )
+        {
+            SweepLocked(
+                DateTime.UtcNow
+            );
+
+            if (
+                _reservations.TryGetValue(
+                    lobbyId,
+                    out var existing
+                ) &&
+                existing.IsLive
+            )
+            {
+                return new DedicatedLaunchResult(
+                    true,
+                    existing.Port,
+                    existing.State,
+                    string.Empty
+                );
+            }
+
+            if (
+                !_enabled
+            )
+            {
+                return DedicatedLaunchResult.Failed(
+                    "Deadlock dedicated servers are disabled."
+                );
+            }
+
+            if (
+                !File.Exists(
+                    _executablePath
+                )
+            )
+            {
+                return DedicatedLaunchResult.Failed(
+                    "Deadlock dedicated executable not found: " +
+                    _executablePath
+                );
+            }
+
+            if (
+                !Directory.Exists(
+                    _workingDirectory
+                )
+            )
+            {
+                return DedicatedLaunchResult.Failed(
+                    "Deadlock dedicated working directory not found: " +
+                    _workingDirectory
+                );
+            }
+
+            if (
+                !File.Exists(
+                    _payloadDllPath
+                )
+            )
+            {
+                return DedicatedLaunchResult.Failed(
+                    "SKYNET x64 payload not found: " +
+                    _payloadDllPath
+                );
+            }
+
+            var port =
+                AllocatePortLocked();
+
+            if (
+                port ==
+                0
+            )
+            {
+                return DedicatedLaunchResult.Failed(
+                    "No available Deadlock dedicated port."
+                );
+            }
+
+            var map =
+                NormalizeMap(
+                    requestedMap,
+                    _defaultMap
+                );
+
+            var arguments =
+                new List<string>
+                {
+                    "-dedicated",
+                    "-insecure",
+                    "-allow_no_lobby_connect",
+                    "",
+                    "",
+                    "-novid",
+                    "-condebug",
+                    "-game",
+                    "citadel"
+                };
+
+            if (
+                TryNormalizeIPv4(
+                    _bindIp,
+                    out var bindIp
+                )
+            )
+            {
+                arguments.Add(
+                    "-ip"
+                );
+
+                arguments.Add(
+                    bindIp
+                );
+            }
+
+            // Keep both forms during the direct-connect bring-up.
+            // Source 2 builds have used both paths historically.
+            arguments.Add(
+                "-port"
+            );
+
+            arguments.Add(
+                port.ToString(
+                    System.Globalization.CultureInfo.InvariantCulture
+                )
+            );
+
+            arguments.Add(
+                "+hostport"
+            );
+
+            arguments.Add(
+                port.ToString(
+                    System.Globalization.CultureInfo.InvariantCulture
+                )
+            );
+
+            arguments.Add(
+                "+tv_citadel_auto_record"
+            );
+
+            arguments.Add(
+                "0"
+            );
+
+            arguments.Add(
+                "+citadel_upload_replay_enabled"
+            );
+
+            arguments.Add(
+                "0"
+            );
+
+            // === SKYNET_DEADLOCK_MM_10023_V52_BEGIN ===
+            arguments.Add(
+                "+sv_matchmaking_enabled"
+            );
+
+            arguments.Add(
+                "1"
+            );
+            // === SKYNET_DEADLOCK_MM_10023_V52_END ===
+            // SKYNET_DEADLOCK_BOTMATCH_PRACTICE_6V6_TEST_V1
+            arguments.Add("+exec");
+            arguments.Add("citadel_botmatch_practice_6v6.cfg");
+            arguments.Add(
+                "+map"
+            );
+
+            arguments.Add(
+                map
+            );
+
+            var environmentVariables =
+                new Dictionary<string, string>(
+                    StringComparer.OrdinalIgnoreCase
+                )
+                {
+                    ["SteamAppId"] =
+                        DeadlockGcRuntimeServices.AppId.ToString(
+                            System.Globalization.CultureInfo.InvariantCulture
+                        ),
+
+                    ["SteamGameId"] =
+                        DeadlockGcRuntimeServices.AppId.ToString(
+                            System.Globalization.CultureInfo.InvariantCulture
+                        ),
+
+                    ["SKYNET_APP_ID"] =
+                        DeadlockGcRuntimeServices.AppId.ToString(
+                            System.Globalization.CultureInfo.InvariantCulture
+                        ),
+
+                    ["SKYNET_DEDICATED_LOBBY_ID"] =
+                        lobbyId.ToString(
+                            System.Globalization.CultureInfo.InvariantCulture
+                        ),
+
+                    ["SKYNET_DEDICATED_PORT"] =
+                        port.ToString(
+                            System.Globalization.CultureInfo.InvariantCulture
+                        ),
+
+                    ["SKYNET_PROCESS_ROLE"] =
+                        "dedicated",
+
+                    ["SKYNET_LOG_SUFFIX"] =
+                        "deadlock_dedicated_" +
+                        lobbyId +
+                        "_" +
+                        port,
+
+                    ["SKYNET_DEDICATED_INSECURE"] =
+                        "1"
+                };
+
+            try
+            {
+                var process =
+                    InjectedProcessLauncher.Launch(
+                        _executablePath,
+                        _payloadDllPath,
+                        arguments,
+                        _workingDirectory,
+                        environmentVariables,
+                        _showWindow
+                    );
+
+                var reservation =
+                    new DedicatedReservation(
+                        lobbyId,
+                        port,
+                        map,
+                        process,
+                        DateTime.UtcNow
+                    );
+
+                _reservations[
+                    lobbyId
+                ] =
+                    reservation;
+
+                _logger.LogInformation(
+                    "Started Deadlock dedicated pid {ProcessId} lobby {LobbyId} port {Port} map {Map}. Args: {Arguments}",
+                    process.Id,
+                    lobbyId,
+                    port,
+                    map,
+                    string.Join(
+                        " ",
+                        arguments
+                    )
+                );
+
+                return new DedicatedLaunchResult(
+                    true,
+                    port,
+                    reservation.State,
+                    string.Empty
+                );
+            }
+            catch (
+                Exception ex
+            )
+            {
+                _logger.LogError(
+                    ex,
+                    "Could not start Deadlock dedicated for lobby {LobbyId}",
+                    lobbyId
+                );
+
+                return DedicatedLaunchResult.Failed(
+                    ex.Message
+                );
+            }
+        }
+    }
+
+    public void ObserveRegistration(
+        ulong gameServerSteamId,
+        ApiGameServer server)
+    {
+        if (
+            gameServerSteamId ==
+                0 ||
+            server ==
+                null ||
+            server.Port <=
+                0 ||
+            !server.Dedicated
+        )
+        {
+            return;
+        }
+
+        // Accept AppId=0 during early Steamworks registration only when
+        // the port is one of OUR reservations. Explicit foreign AppIDs
+        // are never accepted.
+        if (
+            server.AppId !=
+                0 &&
+            server.AppId !=
+                DeadlockGcRuntimeServices.AppId
+        )
+        {
+            return;
+        }
+
+        lock (
+            _sync
+        )
+        {
+            SweepLocked(
+                DateTime.UtcNow
+            );
+
+            var reservation =
+                _reservations.Values.FirstOrDefault(
+                    candidate =>
+                        candidate.IsLive &&
+                        candidate.Port ==
+                            server.Port &&
+                        (
+                            candidate.State ==
+                                DedicatedReservationState.Starting ||
+                            candidate.State ==
+                                DedicatedReservationState.Registered
+                        )
+                );
+
+            if (
+                reservation ==
+                null
+            )
+            {
+                return;
+            }
+
+            reservation.GameServerSteamId =
+                gameServerSteamId;
+
+            reservation.PublicIp =
+                server.IP;
+
+            reservation.State =
+                DedicatedReservationState.Registered;
+
+            _logger.LogInformation(
+                "Deadlock dedicated registered SteamID {SteamId} for lobby {LobbyId} at {Ip}:{Port}",
+                gameServerSteamId,
+                reservation.LobbyId,
+                reservation.PublicIp,
+                reservation.Port
+            );
+        }
+    }
+
+    public string ClaimLobby(
+        ulong gameServerSteamId,
+        uint reportedPort)
+    {
+        if (
+            gameServerSteamId ==
+                0 ||
+            reportedPort ==
+                0
+        )
+        {
+            return "0";
+        }
+
+        lock (
+            _sync
+        )
+        {
+            SweepLocked(
+                DateTime.UtcNow
+            );
+
+            foreach (
+                var reservation in
+                    _reservations.Values
+            )
+            {
+                if (
+                    reservation.GameServerSteamId ==
+                    gameServerSteamId
+                )
+                {
+                    reservation.State =
+                        DedicatedReservationState.Claimed;
+
+                    return reservation.LobbyId.ToString(
+                        System.Globalization.CultureInfo.InvariantCulture
+                    );
+                }
+
+                if (
+                    reservation.IsLive &&
+                    reservation.Port ==
+                        reportedPort &&
+                    (
+                        reservation.State ==
+                            DedicatedReservationState.Starting ||
+                        reservation.State ==
+                            DedicatedReservationState.Registered
+                    )
+                )
+                {
+                    reservation.GameServerSteamId =
+                        gameServerSteamId;
+
+                    reservation.State =
+                        DedicatedReservationState.Claimed;
+
+                    _logger.LogInformation(
+                        "Claimed Deadlock dedicated {SteamId} for lobby {LobbyId} port {Port}",
+                        gameServerSteamId,
+                        reservation.LobbyId,
+                        reportedPort
+                    );
+
+                    return reservation.LobbyId.ToString(
+                        System.Globalization.CultureInfo.InvariantCulture
+                    );
+                }
+            }
+
+            _logger.LogWarning(
+                "Rejected unreserved Deadlock dedicated {SteamId} port {Port}",
+                gameServerSteamId,
+                reportedPort
+            );
+
+            return "0";
+        }
+    }
+
+    public bool HasReservationForPort(
+        uint port)
+    {
+        if (
+            port ==
+            0
+        )
+        {
+            return false;
+        }
+
+        lock (
+            _sync
+        )
+        {
+            SweepLocked(
+                DateTime.UtcNow
+            );
+
+            return _reservations.Values.Any(
+                reservation =>
+                    reservation.IsLive &&
+                    reservation.Port ==
+                        port
+            );
+        }
+    }
+
+    public DedicatedReservationSnapshot GetReservation(
+        ulong lobbyId)
+    {
+        lock (
+            _sync
+        )
+        {
+            SweepLocked(
+                DateTime.UtcNow
+            );
+
+            if (
+                !_reservations.TryGetValue(
+                    lobbyId,
+                    out var reservation
+                )
+            )
+            {
+                return DedicatedReservationSnapshot.NotFound(
+                    lobbyId
+                );
+            }
+
+            return new DedicatedReservationSnapshot(
+                true,
+                reservation.LobbyId,
+                reservation.Port,
+                reservation.Map,
+                reservation.State,
+                reservation.GameServerSteamId,
+                reservation.PublicIp,
+                reservation.Error
+            );
+        }
+    }
+
+    public string GetStatus(
+        ulong lobbyId)
+    {
+        var snapshot =
+            GetReservation(
+                lobbyId
+            );
+
+        return snapshot.Found
+            ? snapshot.State.ToString()
+                .ToLowerInvariant()
+            : "not_found";
+    }
+
+    public bool Release(
+        ulong lobbyId,
+        string reason)
+    {
+        lock (
+            _sync
+        )
+        {
+            if (
+                !_reservations.Remove(
+                    lobbyId,
+                    out var reservation
+                )
+            )
+            {
+                return false;
+            }
+
+            StopProcess(
+                reservation,
+                reason
+            );
+
+            return true;
+        }
+    }
+
+    protected override async Task ExecuteAsync(
+        CancellationToken stoppingToken)
+    {
+        using var timer =
+            new PeriodicTimer(
+                TimeSpan.FromSeconds(
+                    1
+                )
+            );
+
+        try
+        {
+            while (
+                await timer.WaitForNextTickAsync(
+                    stoppingToken
+                )
+            )
+            {
+                lock (
+                    _sync
+                )
+                {
+                    SweepLocked(
+                        DateTime.UtcNow
+                    );
+                }
+            }
+        }
+        catch (
+            OperationCanceledException
+        ) when (
+            stoppingToken.IsCancellationRequested
+        )
+        {
+        }
+    }
+
+    public override Task StopAsync(
+        CancellationToken cancellationToken)
+    {
+        lock (
+            _sync
+        )
+        {
+            foreach (
+                var reservation in
+                    _reservations.Values
+            )
+            {
+                StopProcess(
+                    reservation,
+                    "SKYNET server stopped"
+                );
+            }
+
+            _reservations.Clear();
+        }
+
+        return base.StopAsync(
+            cancellationToken
+        );
+    }
+
+    private void SweepLocked(
+        DateTime current)
+    {
+        foreach (
+            var reservation in
+                _reservations.Values
+        )
+        {
+            if (
+                !reservation.IsLive &&
+                reservation.State !=
+                    DedicatedReservationState.Failed &&
+                reservation.State !=
+                    DedicatedReservationState.Stopped
+            )
+            {
+                reservation.State =
+                    DedicatedReservationState.Failed;
+
+                reservation.Error =
+                    "Deadlock dedicated process exited before assignment.";
+
+                _logger.LogWarning(
+                    "Deadlock dedicated lobby {LobbyId} exited before assignment. ExitCode={ExitCode}",
+                    reservation.LobbyId,
+                    TryGetExitCode(
+                        reservation.Process
+                    )
+                );
+
+                continue;
+            }
+
+            if (
+                reservation.State ==
+                    DedicatedReservationState.Starting &&
+                current -
+                    reservation.StartedAt >
+                    _startupTimeout
+            )
+            {
+                reservation.State =
+                    DedicatedReservationState.Failed;
+
+                reservation.Error =
+                    "Timed out waiting for Deadlock GameServer registration.";
+
+                StopProcess(
+                    reservation,
+                    reservation.Error
+                );
+
+                _logger.LogWarning(
+                    "Deadlock dedicated lobby {LobbyId} timed out waiting for registration",
+                    reservation.LobbyId
+                );
+            }
+        }
+    }
+
+    private int AllocatePortLocked()
+    {
+        for (
+            var port =
+                _portStart;
+
+            port <=
+                Math.Min(
+                    65534,
+                    _portStart +
+                    256
+                );
+
+            port++
+        )
+        {
+            if (
+                _reservations.Values.Any(
+                    reservation =>
+                        reservation.IsLive &&
+                        reservation.Port ==
+                            port
+                )
+            )
+            {
+                continue;
+            }
+
+            if (
+                CanBindPort(
+                    port
+                )
+            )
+            {
+                return port;
+            }
+        }
+
+        return 0;
+    }
+
+    private static bool CanBindPort(
+        int port)
+    {
+        try
+        {
+            using var tcp =
+                new TcpListener(
+                    IPAddress.Any,
+                    port
+                );
+
+            tcp.Start();
+
+            using var udp =
+                new Socket(
+                    AddressFamily.InterNetwork,
+                    SocketType.Dgram,
+                    ProtocolType.Udp
+                );
+
+            udp.Bind(
+                new IPEndPoint(
+                    IPAddress.Any,
+                    port
+                )
+            );
+
+            return true;
+        }
+        catch (
+            SocketException
+        )
+        {
+            return false;
+        }
+    }
+
+    private void StopProcess(
+        DedicatedReservation reservation,
+        string reason)
+    {
+        if (
+            reservation.State !=
+            DedicatedReservationState.Failed
+        )
+        {
+            reservation.State =
+                DedicatedReservationState.Stopped;
+        }
+
+        try
+        {
+            if (
+                !reservation.Process.HasExited
+            )
+            {
+                reservation.Process.Kill(
+                    entireProcessTree:
+                        true
+                );
+
+                _logger.LogInformation(
+                    "Stopped Deadlock dedicated pid {ProcessId} lobby {LobbyId}: {Reason}",
+                    reservation.Process.Id,
+                    reservation.LobbyId,
+                    reason
+                );
+            }
+        }
+        catch (
+            InvalidOperationException
+        )
+        {
+        }
+        catch (
+            Exception ex
+        )
+        {
+            _logger.LogWarning(
+                ex,
+                "Could not stop Deadlock dedicated lobby {LobbyId}",
+                reservation.LobbyId
+            );
+        }
+    }
+
+    private static string ResolvePath(
+        string? configured,
+        string contentRoot,
+        string fallback)
+    {
+        var value =
+            string.IsNullOrWhiteSpace(
+                configured
+            )
+                ? fallback
+                : configured.Trim();
+
+        return Path.GetFullPath(
+            Path.IsPathRooted(
+                value
+            )
+                ? value
+                : Path.Combine(
+                    contentRoot,
+                    value
+                )
+        );
+    }
+
+    private static bool TryNormalizeIPv4(
+        string value,
+        out string normalized)
+    {
+        normalized =
+            string.Empty;
+
+        if (
+            !IPAddress.TryParse(
+                value,
+                out var parsed
+            ) ||
+            parsed.AddressFamily !=
+                AddressFamily.InterNetwork
+        )
+        {
+            return false;
+        }
+
+        normalized =
+            parsed.ToString();
+
+        return true;
+    }
+
+    private static string NormalizeMap(
+        string? requested,
+        string fallback)
+    {
+        var map =
+            string.IsNullOrWhiteSpace(
+                requested
+            )
+                ? fallback
+                : requested.Trim();
+
+        if (
+            map.Length ==
+            0
+        )
+        {
+            return fallback;
+        }
+
+        if (
+            map.Contains(
+                "..",
+                StringComparison.Ordinal
+            )
+        )
+        {
+            return fallback;
+        }
+
+        foreach (
+            var character in
+                map
+        )
+        {
+            if (
+                !char.IsAsciiLetterOrDigit(
+                    character
+                ) &&
+                character !=
+                    '_' &&
+                character !=
+                    '-' &&
+                character !=
+                    '/'
+            )
+            {
+                return fallback;
+            }
+        }
+
+        return map;
+    }
+
+    private static int? TryGetExitCode(
+        Process process)
+    {
+        try
+        {
+            return process.HasExited
+                ? process.ExitCode
+                : null;
+        }
+        catch (
+            InvalidOperationException
+        )
+        {
+            return null;
+        }
+    }
+
+    public sealed record DedicatedLaunchResult(
+        bool Started,
+        int Port,
+        DedicatedReservationState State,
+        string Error)
+    {
+        public static DedicatedLaunchResult Failed(
+            string error)
+        {
+            return new DedicatedLaunchResult(
+                false,
+                0,
+                DedicatedReservationState.Failed,
+                error
+            );
+        }
+    }
+
+    public sealed record DedicatedReservationSnapshot(
+        bool Found,
+        ulong LobbyId,
+        int Port,
+        string Map,
+        DedicatedReservationState State,
+        ulong GameServerSteamId,
+        uint PublicIp,
+        string Error)
+    {
+        public static DedicatedReservationSnapshot NotFound(
+            ulong lobbyId)
+        {
+            return new DedicatedReservationSnapshot(
+                false,
+                lobbyId,
+                0,
+                string.Empty,
+                DedicatedReservationState.Stopped,
+                0,
+                0,
+                string.Empty
+            );
+        }
+    }
+
+    public enum DedicatedReservationState
+    {
+        Starting,
+        Registered,
+        Claimed,
+        Failed,
+        Stopped
+    }
+
+    private sealed class DedicatedReservation
+    {
+        public DedicatedReservation(
+            ulong lobbyId,
+            int port,
+            string map,
+            Process process,
+            DateTime startedAt)
+        {
+            LobbyId =
+                lobbyId;
+
+            Port =
+                port;
+
+            Map =
+                map;
+
+            Process =
+                process;
+
+            StartedAt =
+                startedAt;
+        }
+
+        public ulong LobbyId
+        {
+            get;
+        }
+
+        public int Port
+        {
+            get;
+        }
+
+        public string Map
+        {
+            get;
+        }
+
+        public Process Process
+        {
+            get;
+        }
+
+        public DateTime StartedAt
+        {
+            get;
+        }
+
+        public ulong GameServerSteamId
+        {
+            get;
+            set;
+        }
+
+        public uint PublicIp
+        {
+            get;
+            set;
+        }
+
+        public DedicatedReservationState State
+        {
+            get;
+            set;
+        } =
+            DedicatedReservationState.Starting;
+
+        public string Error
+        {
+            get;
+            set;
+        } =
+            string.Empty;
+
+        public bool IsLive
+        {
+            get
+            {
+                try
+                {
+                    return !Process.HasExited;
+                }
+                catch (
+                    InvalidOperationException
+                )
+                {
+                    return false;
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,1591 @@
+Deadlock 1422450 - POST-MATCH DB TARGET AUDIT V2
+Generated: 2026-08-22T16:46:40.574Z
+
+READ ONLY
+
+============================================================
+CURRENT DeadlockDB.cs :: Matches TABLE
+============================================================
+  2043 |             "INTEGER NOT NULL DEFAULT 0"
+  2044 |         );
+  2045 | 
+  2046 |         EnsureRankedStateColumn(
+  2047 |             connection,
+  2048 |             "LastMatchOutcome",
+  2049 |             "INTEGER NOT NULL DEFAULT 0"
+  2050 |         );
+  2051 | 
+  2052 |         Execute(
+  2053 |             connection,
+  2054 |             """
+  2055 |             CREATE TABLE IF NOT EXISTS Matches (
+  2056 |                 MatchId INTEGER PRIMARY KEY,
+  2057 |                 LobbyId INTEGER NOT NULL DEFAULT 0,
+  2058 | 
+  2059 |                 GameMode INTEGER NOT NULL DEFAULT 0,
+  2060 |                 MatchMode INTEGER NOT NULL DEFAULT 0,
+  2061 | 
+  2062 |                 WinningTeam INTEGER NOT NULL DEFAULT 0,
+  2063 | 
+  2064 |                 StartedAtUtc TEXT NOT NULL DEFAULT '',
+  2065 |                 EndedAtUtc TEXT NOT NULL DEFAULT '',
+  2066 | 
+  2067 |                 CreatedAtUtc TEXT NOT NULL
+  2068 |             );
+  2069 |             """
+  2070 |         );
+  2071 | 
+  2072 |         Execute(
+  2073 |             connection,
+  2074 |             """
+  2075 |             CREATE TABLE IF NOT EXISTS MatchPlayers (
+  2076 |                 MatchId INTEGER NOT NULL,
+  2077 |                 AccountId INTEGER NOT NULL,
+  2078 |                 SteamId INTEGER NOT NULL DEFAULT 0,
+  2079 | 
+  2080 |                 HeroId INTEGER NOT NULL DEFAULT 0,
+  2081 |                 Team INTEGER NOT NULL DEFAULT 0,
+  2082 | 
+  2083 |                 Kills INTEGER NOT NULL DEFAULT 0,
+  2084 |                 Deaths INTEGER NOT NULL DEFAULT 0,
+  2085 |                 Assists INTEGER NOT NULL DEFAULT 0,
+  2086 | 
+  2087 |                 Won INTEGER NOT NULL DEFAULT 0,
+  2088 | 
+  2089 |                 PRIMARY KEY (
+  2090 |                     MatchId,
+  2091 |                     AccountId
+  2092 |                 ),
+  2093 | 
+  2094 |                 FOREIGN KEY (MatchId)
+  2095 |                     REFERENCES Matches(MatchId)
+  2096 |                     ON DELETE CASCADE
+  2097 |             );
+  2098 |             """
+  2099 |         );
+  2100 | 
+  2101 |         Execute(
+  2102 |             connection,
+  2103 |             """
+  2104 |             CREATE INDEX IF NOT EXISTS IX_DeadlockMatchPlayers_AccountId
+  2105 |             ON MatchPlayers (
+  2106 |                 AccountId,
+  2107 |                 MatchId DESC
+  2108 |             );
+  2109 |             """
+  2110 |         );
+  2111 |     }
+  2112 | 
+  2113 |     internal void EnsurePlayer(
+  2114 |         ulong steamId,
+  2115 |         uint accountId,
+  2116 |         string personaName)
+  2117 |     {
+  2118 |         if (accountId == 0)
+  2119 |         {
+  2120 |             return;
+  2121 |         }
+  2122 | 
+  2123 |         var now = UtcNow();
+  2124 | 
+  2125 |         using var connection = OpenConnection();
+  2126 | 
+  2127 |         Execute(
+  2128 |             connection,
+  2129 |             """
+  2130 |             INSERT INTO Players (
+  2131 |                 AccountId,
+  2132 |                 SteamId,
+  2133 |                 PersonaName,
+  2134 |                 CreatedAtUtc,
+  2135 |                 UpdatedAtUtc
+
+
+============================================================
+CURRENT DeadlockDB.cs :: MatchPlayers TABLE
+============================================================
+  2063 | 
+  2064 |                 StartedAtUtc TEXT NOT NULL DEFAULT '',
+  2065 |                 EndedAtUtc TEXT NOT NULL DEFAULT '',
+  2066 | 
+  2067 |                 CreatedAtUtc TEXT NOT NULL
+  2068 |             );
+  2069 |             """
+  2070 |         );
+  2071 | 
+  2072 |         Execute(
+  2073 |             connection,
+  2074 |             """
+  2075 |             CREATE TABLE IF NOT EXISTS MatchPlayers (
+  2076 |                 MatchId INTEGER NOT NULL,
+  2077 |                 AccountId INTEGER NOT NULL,
+  2078 |                 SteamId INTEGER NOT NULL DEFAULT 0,
+  2079 | 
+  2080 |                 HeroId INTEGER NOT NULL DEFAULT 0,
+  2081 |                 Team INTEGER NOT NULL DEFAULT 0,
+  2082 | 
+  2083 |                 Kills INTEGER NOT NULL DEFAULT 0,
+  2084 |                 Deaths INTEGER NOT NULL DEFAULT 0,
+  2085 |                 Assists INTEGER NOT NULL DEFAULT 0,
+  2086 | 
+  2087 |                 Won INTEGER NOT NULL DEFAULT 0,
+  2088 | 
+  2089 |                 PRIMARY KEY (
+  2090 |                     MatchId,
+  2091 |                     AccountId
+  2092 |                 ),
+  2093 | 
+  2094 |                 FOREIGN KEY (MatchId)
+  2095 |                     REFERENCES Matches(MatchId)
+  2096 |                     ON DELETE CASCADE
+  2097 |             );
+  2098 |             """
+  2099 |         );
+  2100 | 
+  2101 |         Execute(
+  2102 |             connection,
+  2103 |             """
+  2104 |             CREATE INDEX IF NOT EXISTS IX_DeadlockMatchPlayers_AccountId
+  2105 |             ON MatchPlayers (
+  2106 |                 AccountId,
+  2107 |                 MatchId DESC
+  2108 |             );
+  2109 |             """
+  2110 |         );
+  2111 |     }
+  2112 | 
+  2113 |     internal void EnsurePlayer(
+  2114 |         ulong steamId,
+  2115 |         uint accountId,
+  2116 |         string personaName)
+  2117 |     {
+  2118 |         if (accountId == 0)
+  2119 |         {
+  2120 |             return;
+  2121 |         }
+  2122 | 
+  2123 |         var now = UtcNow();
+  2124 | 
+  2125 |         using var connection = OpenConnection();
+  2126 | 
+  2127 |         Execute(
+  2128 |             connection,
+  2129 |             """
+  2130 |             INSERT INTO Players (
+  2131 |                 AccountId,
+  2132 |                 SteamId,
+  2133 |                 PersonaName,
+  2134 |                 CreatedAtUtc,
+  2135 |                 UpdatedAtUtc
+  2136 |             )
+  2137 |             VALUES (
+  2138 |                 $accountId,
+  2139 |                 $steamId,
+  2140 |                 $personaName,
+  2141 |                 $now,
+  2142 |                 $now
+  2143 |             )
+  2144 |             ON CONFLICT(AccountId) DO UPDATE SET
+  2145 |                 SteamId = CASE
+  2146 |                     WHEN excluded.SteamId <> 0
+  2147 |                     THEN excluded.SteamId
+  2148 |                     ELSE Players.SteamId
+  2149 |                 END,
+  2150 |                 PersonaName = CASE
+  2151 |                     WHEN excluded.PersonaName <> ''
+  2152 |                     THEN excluded.PersonaName
+  2153 |                     ELSE Players.PersonaName
+  2154 |                 END,
+  2155 |                 UpdatedAtUtc = excluded.UpdatedAtUtc;
+
+
+============================================================
+CURRENT DeadlockDB.cs :: GetMatchHistory()
+============================================================
+  2684 |     // Priority:
+  2685 |     //
+  2686 |     //   1. Real Matches + MatchPlayers rows.
+  2687 |     //   2. Temporary bootstrap history generated from THIS account's
+  2688 |     //      HeroStats.Wins when no real match rows exist yet.
+  2689 |     //
+  2690 |     // Once real match lifecycle persistence is implemented, the fallback
+  2691 |     // automatically stops being used for that account.
+  2692 |     internal string GetMatchHistory(
+  2693 |         uint accountId)
+  2694 |     {
+  2695 |         var result =
+  2696 |             new List<object>();
+  2697 | 
+  2698 |         if (
+  2699 |             accountId == 0
+  2700 |         )
+  2701 |         {
+  2702 |             return Json(
+  2703 |                 result
+  2704 |             );
+  2705 |         }
+  2706 | 
+  2707 |         static long ParseUnixTime(
+  2708 |             string value)
+  2709 |         {
+  2710 |             if (
+  2711 |                 string.IsNullOrWhiteSpace(
+  2712 |                     value
+  2713 |                 )
+  2714 |             )
+  2715 |             {
+  2716 |                 return 0;
+  2717 |             }
+  2718 | 
+  2719 |             if (
+  2720 |                 System.DateTimeOffset.TryParse(
+  2721 |                     value,
+  2722 |                     out var parsed
+  2723 |                 )
+  2724 |             )
+  2725 |             {
+  2726 |                 return parsed
+  2727 |                     .ToUnixTimeSeconds();
+  2728 |             }
+  2729 | 
+  2730 |             return 0;
+  2731 |         }
+  2732 | 
+  2733 |         using var connection =
+  2734 |             OpenConnection();
+  2735 | 
+  2736 |         /*
+  2737 |          * First choice: real persisted matches.
+  2738 |          */
+  2739 |         using (
+  2740 |             var command =
+  2741 |                 connection.CreateCommand()
+  2742 |         )
+  2743 |         {
+  2744 |             command.CommandText =
+  2745 |                 """
+  2746 |                 SELECT
+  2747 |                     m.MatchId,
+  2748 |                     mp.HeroId,
+  2749 |                     mp.Team,
+  2750 |                     mp.Kills,
+  2751 |                     mp.Deaths,
+  2752 |                     mp.Assists,
+  2753 |                     mp.Won,
+  2754 |                     m.GameMode,
+  2755 |                     m.MatchMode,
+  2756 |                     m.WinningTeam,
+  2757 |                     m.StartedAtUtc,
+  2758 |                     m.EndedAtUtc,
+  2759 |                     m.CreatedAtUtc
+  2760 |                 FROM MatchPlayers AS mp
+  2761 |                 INNER JOIN Matches AS m
+  2762 |                     ON m.MatchId = mp.MatchId
+  2763 |                 WHERE
+  2764 |                     mp.AccountId = $accountId
+  2765 |                 ORDER BY
+  2766 |                     m.MatchId DESC
+  2767 |                 LIMIT 100;
+  2768 |                 """;
+  2769 | 
+  2770 |             command.Parameters.AddWithValue(
+  2771 |                 "$accountId",
+  2772 |                 accountId
+  2773 |             );
+  2774 | 
+  2775 |             using var reader =
+  2776 |                 command.ExecuteReader();
+  2777 | 
+  2778 |             while (
+  2779 |                 reader.Read()
+  2780 |             )
+  2781 |             {
+  2782 |                 var startedAt =
+  2783 |                     reader.IsDBNull(10)
+  2784 |                         ? ""
+  2785 |                         : reader.GetString(10);
+  2786 | 
+  2787 |                 var endedAt =
+  2788 |                     reader.IsDBNull(11)
+  2789 |                         ? ""
+  2790 |                         : reader.GetString(11);
+  2791 | 
+  2792 |                 var createdAt =
+  2793 |                     reader.IsDBNull(12)
+  2794 |                         ? ""
+  2795 |                         : reader.GetString(12);
+  2796 | 
+  2797 |                 var startTime =
+  2798 |                     ParseUnixTime(
+  2799 |                         startedAt
+  2800 |                     );
+  2801 | 
+  2802 |                 if (
+  2803 |                     startTime <= 0
+  2804 |                 )
+  2805 |                 {
+  2806 |                     startTime =
+  2807 |                         ParseUnixTime(
+  2808 |                             createdAt
+  2809 |                         );
+  2810 |                 }
+  2811 | 
+  2812 |                 var endTime =
+  2813 |                     ParseUnixTime(
+  2814 |                         endedAt
+  2815 |                     );
+  2816 | 
+  2817 |                 long duration =
+  2818 |                     1800;
+  2819 | 
+  2820 |                 if (
+  2821 |                     startTime > 0 &&
+  2822 |                     endTime > startTime
+  2823 |                 )
+  2824 |                 {
+  2825 |                     duration =
+  2826 |                         endTime -
+  2827 |                         startTime;
+  2828 |                 }
+  2829 | 
+  2830 |                 if (
+  2831 |                     duration < 0
+  2832 |                 )
+  2833 |                 {
+  2834 |                     duration = 0;
+  2835 |                 }
+  2836 | 
+  2837 |                 if (
+  2838 |                     duration >
+  2839 |                     int.MaxValue
+  2840 |                 )
+  2841 |                 {
+  2842 |                     duration =
+  2843 |                         int.MaxValue;
+  2844 |                 }
+  2845 | 
+  2846 |                 var won =
+  2847 |                     reader.GetInt64(6) !=
+  2848 |                     0;
+  2849 | 
+  2850 |                 var matchResult =
+  2851 |                     won
+  2852 |                         ? 1u
+  2853 |                         : 2u;
+  2854 | 
+  2855 |                 result.Add(
+  2856 |                     new
+  2857 |                     {
+  2858 |                         matchId =
+  2859 |                             reader.GetInt64(0),
+  2860 | 
+  2861 |                         heroId =
+  2862 |                             Convert.ToUInt32(
+  2863 |                                 reader.GetInt64(1)
+  2864 |                             ),
+  2865 | 
+  2866 |                         durationS =
+  2867 |                             Convert.ToUInt32(
+  2868 |                                 duration
+  2869 |                             ),
+  2870 | 
+  2871 |                         startTime,
+  2872 | 
+  2873 |                         matchResult,
+  2874 | 
+  2875 |                         playerTeam =
+  2876 |                             Convert.ToUInt32(
+  2877 |                                 reader.GetInt64(2)
+  2878 |                             ),
+  2879 | 
+  2880 |                         playerKills =
+  2881 |                             Convert.ToUInt32(
+  2882 |                                 reader.GetInt64(3)
+  2883 |                             ),
+  2884 | 
+  2885 |                         playerDeaths =
+  2886 |                             Convert.ToUInt32(
+  2887 |                                 reader.GetInt64(4)
+  2888 |                             ),
+  2889 | 
+  2890 |                         playerAssists =
+  2891 |                             Convert.ToUInt32(
+  2892 |                                 reader.GetInt64(5)
+  2893 |                             ),
+  2894 | 
+  2895 |                         gameMode =
+  2896 |                             Convert.ToUInt32(
+  2897 |                                 reader.GetInt64(7)
+  2898 |                             ),
+  2899 | 
+  2900 |                         matchMode =
+  2901 |                             Convert.ToUInt32(
+  2902 |                                 reader.GetInt64(8)
+  2903 |                             ),
+  2904 | 
+  2905 |                         winningTeam =
+  2906 |                             Convert.ToUInt32(
+  2907 |                                 reader.GetInt64(9)
+  2908 |                             ),
+  2909 | 
+  2910 |                         playerMatchOutcome =
+  2911 |                             matchResult,
+  2912 | 
+  2913 |                         bootstrap =
+  2914 |                             false
+  2915 |                     }
+  2916 |                 );
+  2917 |             }
+  2918 |         }
+  2919 | 
+  2920 |         if (
+  2921 |             result.Count > 0
+  2922 |         )
+  2923 |         {
+  2924 |             return Json(
+  2925 |                 result
+  2926 |             );
+  2927 |         }
+  2928 | 
+  2929 |         /*
+  2930 |          * Temporary bootstrap.
+  2931 |          *
+  2932 |          * No global 3 x 20 generator exists here.
+  2933 |          * Only HeroStats belonging to accountId are used.
+  2934 |          *
+  2935 |          * Example:
+  2936 |          *
+  2937 |          *   Account A: 20 + 20 + 20 wins -> 60 history rows.
+  2938 |          *   Account B: no HeroStats wins -> 0 history rows.
+  2939 |          */
+  2940 |         var bootstrapBaseTime =
+  2941 |             System.DateTimeOffset
+  2942 |                 .UtcNow
+  2943 |                 .ToUnixTimeSeconds();
+  2944 | 
+  2945 |         var serial =
+  2946 |             0;
+  2947 | 
+  2948 |         using (
+  2949 |             var heroCommand =
+  2950 |                 connection.CreateCommand()
+  2951 |         )
+  2952 |         {
+  2953 |             heroCommand.CommandText =
+  2954 |                 """
+  2955 |                 SELECT
+  2956 |                     HeroId,
+  2957 |                     Wins,
+  2958 |                     UpdatedAtUtc
+  2959 |                 FROM HeroStats
+  2960 |                 WHERE
+  2961 |                     AccountId = $accountId
+  2962 |                     AND HeroId <> 0
+  2963 |                     AND Wins > 0
+  2964 |                 ORDER BY
+  2965 |                     Wins DESC,
+  2966 |                     HeroId ASC;
+  2967 |                 """;
+  2968 | 
+  2969 |             heroCommand.Parameters.AddWithValue(
+  2970 |                 "$accountId",
+  2971 |                 accountId
+  2972 |             );
+  2973 | 
+  2974 |             using var heroReader =
+  2975 |                 heroCommand.ExecuteReader();
+  2976 | 
+  2977 |             while (
+  2978 |                 heroReader.Read() &&
+  2979 |                 result.Count < 100
+  2980 |             )
+  2981 |             {
+  2982 |                 var heroId =
+  2983 |                     Convert.ToUInt32(
+  2984 |                         heroReader.GetInt64(0)
+  2985 |                     );
+  2986 | 
+  2987 |                 var wins =
+  2988 |                     Convert.ToUInt32(
+  2989 |                         heroReader.GetInt64(1)
+  2990 |                     );
+  2991 | 
+  2992 |                 var updatedAt =
+  2993 |                     heroReader.IsDBNull(2)
+  2994 |                         ? ""
+  2995 |                         : heroReader.GetString(2);
+  2996 | 
+  2997 |                 var heroTimestamp =
+  2998 |                     ParseUnixTime(
+  2999 |                         updatedAt
+  3000 |                     );
+  3001 | 
+  3002 |                 if (
+  3003 |                     heroTimestamp > 0 &&
+  3004 |                     heroTimestamp <
+  3005 |                         bootstrapBaseTime
+  3006 |                 )
+  3007 |                 {
+  3008 |                     /*
+  3009 |                      * Keep the global bootstrap base recent, but preserve
+  3010 |                      * deterministic ordering between hero rows.
+  3011 |                      */
+  3012 |                 }
+  3013 | 
+  3014 |                 uint winIndex =
+  3015 |                     0;
+  3016 | 
+  3017 |                 while (
+  3018 |                     winIndex < wins &&
+  3019 |                     result.Count < 100
+  3020 |                 )
+  3021 |                 {
+  3022 |                     serial =
+  3023 |                         serial + 1;
+  3024 | 
+  3025 |                     var syntheticMatchId =
+  3026 |                         8_000_000_000_000_000L +
+  3027 |                         (
+  3028 |                             (long)accountId *
+  3029 |                             1_000_000L
+  3030 |                         ) +
+  3031 |                         serial;
+  3032 | 
+  3033 |                     var startTime =
+  3034 |                         bootstrapBaseTime -
+  3035 |                         (
+  3036 |                             serial *
+  3037 |                             3600L
+  3038 |                         );
+  3039 | 
+  3040 |                     result.Add(
+  3041 |                         new
+  3042 |                         {
+  3043 |                             matchId =
+  3044 |                                 syntheticMatchId,
+  3045 | 
+  3046 |                             heroId,
+  3047 | 
+  3048 |                             durationS =
+  3049 |                                 Convert.ToUInt32(
+  3050 |                                     1800 +
+  3051 |                                     serial
+  3052 |                                 ),
+  3053 | 
+  3054 |                             startTime,
+  3055 | 
+  3056 |                             matchResult =
+  3057 |                                 1u,
+  3058 | 
+  3059 |                             playerTeam =
+  3060 |                                 0u,
+  3061 | 
+  3062 |                             playerKills =
+  3063 |                                 0u,
+  3064 | 
+  3065 |                             playerDeaths =
+  3066 |                                 0u,
+  3067 | 
+  3068 |                             playerAssists =
+  3069 |                                 0u,
+  3070 | 
+  3071 |                             gameMode =
+  3072 |                                 1u,
+  3073 | 
+  3074 |                             matchMode =
+  3075 |                                 1u,
+  3076 | 
+  3077 |                             winningTeam =
+  3078 |                                 0u,
+  3079 | 
+  3080 |                             playerMatchOutcome =
+  3081 |                                 1u,
+  3082 | 
+  3083 |                             bootstrap =
+  3084 |                                 true
+  3085 |                         }
+  3086 |                     );
+  3087 | 
+  3088 |                     winIndex =
+  3089 |                         winIndex + 1;
+  3090 |                 }
+  3091 |             }
+  3092 |         }
+  3093 | 
+  3094 |         return Json(
+  3095 |             result
+  3096 |         );
+  3097 |     }
+  3098 | 
+  3099 | 
+  3100 |     // SKYNET_DEADLOCK_RANKED_DB_SOCACHE_V1
+
+
+============================================================
+CURRENT DeadlockDB.cs :: ALL Matches / MatchPlayers references
+============================================================
+>>> around line 225
+   220 |         );
+   221 | 
+   222 |         /*
+   223 |          * Temporary deterministic bootstrap.
+   224 |          *
+   225 |          * Only rows which already contain played matches and have no
+   226 |          * combat/economy profile statistics are populated.
+   227 |          *
+   228 |          * This exists only so the current synthetic Ranked test data
+   229 |          * exercises the entire profile UI.
+   230 |          *
+   231 |          * Future completed matches will persist real values into the
+   232 |          * same columns.
+   233 |          */
+   234 |         Execute(
+   235 |             connection,
+   236 |             """
+   237 |             CREATE TABLE IF NOT EXISTS DeadlockMigrations (
+
+>>> around line 527
+   522 |         {
+   523 |             var migrationNow =
+   524 |                 UtcNow();
+   525 | 
+   526 |             /*
+   527 |              * A hero cannot have fewer played matches than recorded
+   528 |              * wins + losses.
+   529 |              *
+   530 |              * Current synthetic Ranked seed has:
+   531 |              *
+   532 |              *   Wins = 20
+   533 |              *   Losses = 0
+   534 |              *   MatchesPlayed = 0
+   535 |              *
+   536 |              * so it becomes:
+   537 |              *
+   538 |              *   MatchesPlayed = 20
+   539 |              */
+
+>>> around line 2055
+  2050 |         );
+  2051 | 
+  2052 |         Execute(
+  2053 |             connection,
+  2054 |             """
+  2055 |             CREATE TABLE IF NOT EXISTS Matches (
+  2056 |                 MatchId INTEGER PRIMARY KEY,
+  2057 |                 LobbyId INTEGER NOT NULL DEFAULT 0,
+  2058 | 
+  2059 |                 GameMode INTEGER NOT NULL DEFAULT 0,
+  2060 |                 MatchMode INTEGER NOT NULL DEFAULT 0,
+  2061 | 
+  2062 |                 WinningTeam INTEGER NOT NULL DEFAULT 0,
+  2063 | 
+  2064 |                 StartedAtUtc TEXT NOT NULL DEFAULT '',
+  2065 |                 EndedAtUtc TEXT NOT NULL DEFAULT '',
+  2066 | 
+  2067 |                 CreatedAtUtc TEXT NOT NULL
+
+>>> around line 2075
+  2070 |         );
+  2071 | 
+  2072 |         Execute(
+  2073 |             connection,
+  2074 |             """
+  2075 |             CREATE TABLE IF NOT EXISTS MatchPlayers (
+  2076 |                 MatchId INTEGER NOT NULL,
+  2077 |                 AccountId INTEGER NOT NULL,
+  2078 |                 SteamId INTEGER NOT NULL DEFAULT 0,
+  2079 | 
+  2080 |                 HeroId INTEGER NOT NULL DEFAULT 0,
+  2081 |                 Team INTEGER NOT NULL DEFAULT 0,
+  2082 | 
+  2083 |                 Kills INTEGER NOT NULL DEFAULT 0,
+  2084 |                 Deaths INTEGER NOT NULL DEFAULT 0,
+  2085 |                 Assists INTEGER NOT NULL DEFAULT 0,
+  2086 | 
+  2087 |                 Won INTEGER NOT NULL DEFAULT 0,
+
+>>> around line 2095
+  2090 |                     MatchId,
+  2091 |                     AccountId
+  2092 |                 ),
+  2093 | 
+  2094 |                 FOREIGN KEY (MatchId)
+  2095 |                     REFERENCES Matches(MatchId)
+  2096 |                     ON DELETE CASCADE
+  2097 |             );
+  2098 |             """
+  2099 |         );
+  2100 | 
+  2101 |         Execute(
+  2102 |             connection,
+  2103 |             """
+  2104 |             CREATE INDEX IF NOT EXISTS IX_DeadlockMatchPlayers_AccountId
+  2105 |             ON MatchPlayers (
+  2106 |                 AccountId,
+  2107 |                 MatchId DESC
+
+>>> around line 2686
+  2681 |     //
+  2682 |     // Canonical account-scoped source for GC 9112/9113.
+  2683 |     //
+  2684 |     // Priority:
+  2685 |     //
+  2686 |     //   1. Real Matches + MatchPlayers rows.
+  2687 |     //   2. Temporary bootstrap history generated from THIS account's
+  2688 |     //      HeroStats.Wins when no real match rows exist yet.
+  2689 |     //
+  2690 |     // Once real match lifecycle persistence is implemented, the fallback
+  2691 |     // automatically stops being used for that account.
+  2692 |     internal string GetMatchHistory(
+  2693 |         uint accountId)
+  2694 |     {
+  2695 |         var result =
+  2696 |             new List<object>();
+  2697 | 
+  2698 |         if (
+
+>>> around line 2737
+  2732 | 
+  2733 |         using var connection =
+  2734 |             OpenConnection();
+  2735 | 
+  2736 |         /*
+  2737 |          * First choice: real persisted matches.
+  2738 |          */
+  2739 |         using (
+  2740 |             var command =
+  2741 |                 connection.CreateCommand()
+  2742 |         )
+  2743 |         {
+  2744 |             command.CommandText =
+  2745 |                 """
+  2746 |                 SELECT
+  2747 |                     m.MatchId,
+  2748 |                     mp.HeroId,
+  2749 |                     mp.Team,
+
+>>> around line 2760
+  2755 |                     m.MatchMode,
+  2756 |                     m.WinningTeam,
+  2757 |                     m.StartedAtUtc,
+  2758 |                     m.EndedAtUtc,
+  2759 |                     m.CreatedAtUtc
+  2760 |                 FROM MatchPlayers AS mp
+  2761 |                 INNER JOIN Matches AS m
+  2762 |                     ON m.MatchId = mp.MatchId
+  2763 |                 WHERE
+  2764 |                     mp.AccountId = $accountId
+  2765 |                 ORDER BY
+  2766 |                     m.MatchId DESC
+  2767 |                 LIMIT 100;
+  2768 |                 """;
+  2769 | 
+  2770 |             command.Parameters.AddWithValue(
+  2771 |                 "$accountId",
+  2772 |                 accountId
+
+
+
+============================================================
+Program.cs :: MatchHistory provider wire
+============================================================
+   112 |     {
+   113 |         deadlockGcDb.EnsurePlayer(
+   114 |             steamId,
+   115 |             accountId,
+   116 |             personaName
+   117 |         );
+   118 | 
+   119 |         return true;
+   120 |     };
+   121 | 
+   122 | DeadlockGcRuntimeServices.AccountStatsJsonProvider =
+   123 |     accountId =>
+   124 |         deadlockGcDb.GetAccountStats(
+   125 |             accountId
+   126 |         );
+   127 | 
+   128 |         // SKYNET_DEADLOCK_RANKED_DB_PROVIDER_WIRE_V1
+   129 |         DeadlockGcRuntimeServices.RankedSocacheJsonProvider =
+   130 |             accountId =>
+   131 |                 deadlockGcDb.GetRankedSocacheSnapshot(
+   132 |                     accountId
+   133 |                 );
+   134 | 
+   135 | 
+   136 | // SKYNET_DEADLOCK_MATCH_HISTORY_DB_PROVIDER_WIRE_V1
+   137 | DeadlockGcRuntimeServices.MatchHistoryJsonProvider =
+   138 |     accountId =>
+   139 |         deadlockGcDb.GetMatchHistory(
+   140 |             accountId
+   141 |         );
+   142 | 
+   143 | DeadlockGcRuntimeServices.HeroStatsJsonProvider =
+   144 |     accountId =>
+   145 |         deadlockGcDb.GetHeroStats(
+   146 |             accountId
+   147 |         );
+   148 | 
+   149 | // SKYNET_DEADLOCK_DEDICATED_RUNTIME_WIRE_V1
+   150 | var deadlockDedicatedServers =
+   151 |     app.Services.GetRequiredService<DeadlockDedicatedServerSupervisor>();
+   152 | 
+   153 | DeadlockGcRuntimeServices.DedicatedServerStart =
+   154 |     (lobbyId, map) =>
+   155 |         deadlockDedicatedServers.Start(
+   156 |             lobbyId,
+   157 |             map
+   158 |         );
+   159 | 
+   160 | DeadlockGcRuntimeServices.DedicatedServerClaim =
+   161 |     (gameServerSteamId, port) =>
+   162 |         deadlockDedicatedServers.ClaimLobby(
+   163 |             gameServerSteamId,
+   164 |             port
+   165 |         );
+   166 | 
+   167 | DeadlockGcRuntimeServices.DedicatedServerPortReserved =
+   168 |     port =>
+   169 |         deadlockDedicatedServers.HasReservationForPort(
+   170 |             port
+   171 |         );
+   172 | 
+
+
+============================================================
+DeadlockGcRuntimeServices.cs :: MatchHistory provider
+============================================================
+    31 |         set;
+    32 |     }
+    33 | 
+    34 | 
+    35 |     public static Func<uint, string>? HeroStatsJsonProvider
+    36 |     {
+    37 |         get;
+    38 |         set;
+    39 |     }
+    40 | 
+    41 | 
+    42 |     // SKYNET_DEADLOCK_RANKED_DB_PROVIDER_V1
+    43 |     public static Func<uint, string>? RankedSocacheJsonProvider
+    44 |     {
+    45 |         get;
+    46 |         set;
+    47 |     }
+    48 | 
+    49 | 
+    50 |     // SKYNET_DEADLOCK_MATCH_HISTORY_DB_PROVIDER_V1
+    51 |     public static Func<uint, string>? MatchHistoryJsonProvider
+    52 |     {
+    53 |         get;
+    54 |         set;
+    55 |     }
+    56 | 
+    57 |     // SKYNET_DEADLOCK_DEDICATED_RUNTIME_V1
+    58 | 
+    59 |     public static Func<
+    60 |         ulong,
+    61 |         string,
+    62 |         DeadlockDedicatedServerSupervisor.DedicatedLaunchResult
+    63 |     >? DedicatedServerStart
+    64 |     {
+    65 |         get;
+    66 |         set;
+    67 |     }
+    68 | 
+    69 |     public static Func<
+    70 |         ulong,
+    71 |         uint,
+    72 |         string
+    73 |     >? DedicatedServerClaim
+    74 |     {
+    75 |         get;
+    76 |         set;
+    77 |     }
+    78 | 
+    79 |     public static Func<
+    80 |         uint,
+    81 |         bool
+
+
+============================================================
+GameCoordinatorScriptPlugin.cs :: DeadlockMatchHistory()
+============================================================
+   301 |             )
+   302 |             // SKYNET_DEADLOCK_MATCH_HISTORY_DB_HOST_REGISTER_V1
+   303 |             .RegisterHostFunction(
+   304 |                 "gc",
+   305 |                 "deadlockMatchHistory",
+   306 |                 args =>
+   307 |                     dispatcher
+   308 |                         .RequireCurrent()
+   309 |                         .DeadlockMatchHistory(
+   310 |                             args
+   311 |                         )
+   312 |             )
+   313 | // SKYNET_DEADLOCK_DEDICATED_HOST_REGISTER_V1
+   314 |             .RegisterHostFunction(
+   315 |                 "gc",
+   316 |                 "deadlockStartDedicatedServer",
+   317 |                 dispatcher.DeadlockStartDedicatedServer
+   318 |             )
+   319 |             .RegisterHostFunction(
+   320 |                 "gc",
+   321 |                 "deadlockDedicatedServerState",
+   322 |                 dispatcher.DeadlockDedicatedServerState
+   323 |             )
+   324 |             .RegisterHostFunction(
+   325 |                 "gc",
+   326 |                 "deadlockReleaseDedicatedServer",
+   327 |                 dispatcher.DeadlockReleaseDedicatedServer
+   328 |             )
+   329 |             // SKYNET_DEADLOCK_POST_SIGNOUT_DELAYED_RELEASE_V1_REGISTER
+   330 |             .RegisterHostFunction(
+   331 |                 "gc",
+   332 |                 "deadlockScheduleCurrentMatchSignoutRelease",
+   333 |                 args =>
+   334 |                     dispatcher
+   335 |                         .RequireCurrent()
+   336 |                         .DeadlockScheduleCurrentMatchSignoutRelease(
+   337 |                             args
+   338 |                         )
+   339 |             )
+   340 |             // SKYNET_DEADLOCK_CLIENT_ASSIGN_HOST_V111
+   341 |             .RegisterHostFunction(
+   342 |                 "gc",
+   343 |                 "deadlockQueueGcMessageForAccount",
+   344 |                 args =>
+   345 |                     dispatcher
+   346 |                         .RequireCurrent()
+   347 |                         .DeadlockQueueGcMessageForAccount(
+   348 |                             args
+   349 |                         )
+   350 |             );
+   351 | 
+   352 |     
+   353 | 
+   354 |         // SKYNET_DEADLOCK_DEDICATED_STEAMID_GUARD_V1_REGISTER
+   355 |         // SKYNET_DEADLOCK_10025_HOST_REGISTER_V1
+   356 |         builder.RegisterHostFunction(
+   357 |             "gc",
+   358 |             "deadlockUpdateCurrentLobbyServerState",
+   359 |             _ =>
+   360 |                 dispatcher
+   361 |                     .RequireCurrent()
+   362 |                     .DeadlockUpdateCurrentLobbyServerState()
+   363 |         );
+   364 | 
+   365 |         builder.RegisterHostFunction(
+   366 |             "gc",
+   367 |             "deadlockIsDedicatedGameServer",
+   368 |             args =>
+   369 |                 dispatcher
+   370 |                     .RequireCurrent()
+   371 |                     .DeadlockIsDedicatedGameServer(args));
+   372 | }
+   373 | 
+   374 |     private static void RegisterDotaHostFunctions(TypeSharpRuntimeBuilder builder, ScriptHostDispatcher dispatcher)
+   375 |     {
+   376 |         builder
+   377 |             .RegisterHostFunction("gc", "dotaInventory", dispatcher.DotaInventory)
+   378 |             .RegisterHostFunction("gc", "dotaCatalogItem", dispatcher.DotaCatalogItem)
+   379 |             .RegisterHostFunction("gc", "dotaClientVersion", dispatcher.DotaClientVersion)
+   380 |             .RegisterHostFunction("gc", "dotaEquipItem", dispatcher.DotaEquipItem)
+   381 |             .RegisterHostFunction("gc", "dotaSetItemStyle", dispatcher.DotaSetItemStyle)
+   382 |             .RegisterHostFunction("gc", "dotaProfile", dispatcher.DotaProfile)
+   383 |             .RegisterHostFunction("gc", "dotaSaveProfileSlots", dispatcher.DotaSaveProfileSlots)
+   384 |             .RegisterHostFunction("gc", "dotaSaveProfileUpdate", dispatcher.DotaSaveProfileUpdate)
+   385 |             .RegisterHostFunction("gc", "dotaProfileConductScorecard", dispatcher.DotaProfileConductScorecard)
+   386 |             .RegisterHostFunction("gc", "dotaProfileQuestProgress", dispatcher.DotaProfileQuestProgress)
+   387 |             .RegisterHostFunction("gc", "dotaProfilePeriodicResource", dispatcher.DotaProfilePeriodicResource)
+   388 |             .RegisterHostFunction("gc", "dotaProfileHeroStickers", dispatcher.DotaProfileHeroStickers)
+   389 |             .RegisterHostFunction("gc", "dotaProfileSetHeroSticker", dispatcher.DotaProfileSetHeroSticker)
+   390 |             .RegisterHostFunction("gc", "dotaProfileOverworldState", dispatcher.DotaProfileOverworldState)
+   391 |             .RegisterHostFunction("gc", "dotaProfileMonsterHunterState", dispatcher.DotaProfileMonsterHunterState)
+   392 |             .RegisterHostFunction("gc", "dotaSocialEmoticonAccess", _ => dispatcher.RequireCurrent().DotaSocialEmoticonAccess())
+   393 |             .RegisterHostFunction("gc", "dotaSocialFeed", dispatcher.DotaSocialFeed)
+   394 |             .RegisterHostFunction("gc", "dotaSocialFeedComments", dispatcher.DotaSocialFeedComments)
+   395 |             .RegisterHostFunction("gc", "dotaSocialFeedPostComment", dispatcher.DotaSocialFeedPostComment)
+   396 |             .RegisterHostFunction("gc", "dotaSocialMatchComments", dispatcher.DotaSocialMatchComments)
+   397 |             .RegisterHostFunction("gc", "dotaSocialMatchPostComment", dispatcher.DotaSocialMatchPostComment)
+   398 |             .RegisterHostFunction("gc", "dotaChatChannels", dispatcher.DotaChatChannels)
+   399 |             .RegisterHostFunction("gc", "dotaChatJoinChannel", dispatcher.DotaChatJoinChannel)
+   400 |             .RegisterHostFunction("gc", "dotaChatChannel", dispatcher.DotaChatChannel)
+   401 |             .RegisterHostFunction("gc", "dotaChatLeaveChannel", dispatcher.DotaChatLeaveChannel)
+   402 |             .RegisterHostFunction("gc", "dotaChatBroadcast", dispatcher.DotaChatBroadcast)
+   403 |             .RegisterHostFunction("gc", "dotaGuildEnsureCurrent", dispatcher.DotaGuildEnsureCurrent)
+   404 |             .RegisterHostFunction("gc", "dotaGuildMembership", dispatcher.DotaGuildMembership)
+   405 |             .RegisterHostFunction("gc", "dotaGuild", dispatcher.DotaGuild)
+   406 |             .RegisterHostFunction("gc", "dotaGuildPersonaInfo", dispatcher.DotaGuildPersonaInfo)
+   407 |             .RegisterHostFunction("gc", "dotaGuildEventData", dispatcher.DotaGuildEventData)
+   408 |             .RegisterHostFunction("gc", "dotaGuildInvite", dispatcher.DotaGuildInvite)
+   409 |             .RegisterHostFunction("gc", "dotaGuildDeclineInvite", dispatcher.DotaGuildDeclineInvite)
+   410 |             .RegisterHostFunction("gc", "dotaGuildCancelInvite", dispatcher.DotaGuildCancelInvite)
+   411 |             .RegisterHostFunction("gc", "dotaGuildAcceptInvite", dispatcher.DotaGuildAcceptInvite)
+   412 |             .RegisterHostFunction("gc", "dotaGuildLeave", dispatcher.DotaGuildLeave)
+   413 |             .RegisterHostFunction("gc", "dotaReporterUpdates", dispatcher.DotaReporterUpdates)
+   414 |             .RegisterHostFunction("gc", "dotaAcknowledgeReporterUpdates", dispatcher.DotaAcknowledgeReporterUpdates)
+   415 |             .RegisterHostFunction("gc", "dotaTeam", dispatcher.DotaTeam)
+   416 |             .RegisterHostFunction("gc", "dotaTeamsForAccount", dispatcher.DotaTeamsForAccount)
+   417 |             .RegisterHostFunction("gc", "dotaNextTeamId", dispatcher.DotaNextTeamId)
+   418 |             .RegisterHostFunction("gc", "dotaUpsertTeam", dispatcher.DotaUpsertTeam)
+   419 |             .RegisterHostFunction("gc", "dotaAddTeamMember", dispatcher.DotaAddTeamMember)
+   420 |             .RegisterHostFunction("gc", "dotaRemoveTeamMember", dispatcher.DotaRemoveTeamMember)
+   421 |             .RegisterHostFunction("gc", "dotaRemoveTeam", dispatcher.DotaRemoveTeam)
+   422 |             .RegisterHostFunction("gc", "dotaTeamNameAvailable", dispatcher.DotaTeamNameAvailable)
+   423 |             .RegisterHostFunction("gc", "dotaTeamTagAvailable", dispatcher.DotaTeamTagAvailable)
+   424 |             .RegisterHostFunction("gc", "dotaTeamPlayerInfo", dispatcher.DotaTeamPlayerInfo)
+   425 |             .RegisterHostFunction("gc", "dotaUpsertTeamPlayerInfo", dispatcher.DotaUpsertTeamPlayerInfo)
+   426 |             .RegisterHostFunction("gc", "dotaDeleteTeamPlayerInfo", dispatcher.DotaDeleteTeamPlayerInfo)
+   427 |             .RegisterHostFunction("gc", "dotaLookupAccountName", dispatcher.DotaLookupAccountName)
+   428 |             .RegisterHostFunction("gc", "dotaEventPoints", dispatcher.DotaEventPoints)
+   429 |             .RegisterHostFunction("gc", "dotaHeroStandings", dispatcher.DotaHeroStandings)
+   430 |             .RegisterHostFunction("gc", "dotaHeroGlobalData", dispatcher.DotaHeroGlobalData)
+   431 |             .RegisterHostFunction("gc", "dotaPlayerStats", dispatcher.DotaPlayerStats)
+   432 |             .RegisterHostFunction("gc", "dotaRank", dispatcher.DotaRank)
+   433 |             .RegisterHostFunction("gc", "dotaTeammateStats", dispatcher.DotaTeammateStats)
+   434 |             .RegisterHostFunction("gc", "dotaMatchHistory", dispatcher.DotaMatchHistory)
+   435 |             .RegisterHostFunction("gc", "dotaMatchDetails", dispatcher.DotaMatchDetails)
+   436 |             .RegisterHostFunction("gc", "dotaHeroStatsHistory", dispatcher.DotaHeroStatsHistory)
+   437 |             .RegisterHostFunction("gc", "dotaMatchVotes", dispatcher.DotaMatchVotes)
+   438 |             .RegisterHostFunction("gc", "dotaShowcaseStats", dispatcher.DotaShowcaseStats)
+   439 |             .RegisterHostFunction("gc", "dotaRecentAccomplishments", dispatcher.DotaRecentAccomplishments)
+   440 |             .RegisterHostFunction("gc", "dotaHeroRecentAccomplishments", dispatcher.DotaHeroRecentAccomplishments)
+   441 |             .RegisterHostFunction("gc", "dotaHasMvpVote", dispatcher.DotaHasMvpVote)
+   442 |             .RegisterHostFunction("gc", "dotaVoteForMvp", dispatcher.DotaVoteForMvp)
+   443 |             .RegisterHostFunction("gc", "dotaFinalizeMvpVote", dispatcher.DotaFinalizeMvpVote)
+   444 |             .RegisterHostFunction("gc", "dotaSubmitLobbyMvpVote", dispatcher.DotaSubmitLobbyMvpVote)
+   445 |             .RegisterHostFunction("gc", "dotaRecordSignOutMvpStats", dispatcher.DotaRecordSignOutMvpStats)
+   446 |             .RegisterHostFunction("gc", "dotaRerollPlayerChallenge", dispatcher.DotaRerollPlayerChallenge)
+   447 |             .RegisterHostFunction("gc", "dotaRecordMatchSignOutPermission", dispatcher.DotaRecordMatchSignOutPermission)
+   448 |             .RegisterHostFunction("gc", "dotaSetMatchHistoryAccess", dispatcher.DotaSetMatchHistoryAccess)
+   449 |             .RegisterHostFunction("gc", "dotaRecordServerStatus", dispatcher.DotaRecordServerStatus)
+   450 |             .RegisterHostFunction("gc", "dotaRecordLeaver", dispatcher.DotaRecordLeaver)
+   451 |             .RegisterHostFunction("gc", "dotaRecordRealtimeStats", dispatcher.DotaRecordRealtimeStats)
+   452 |             .RegisterHostFunction("gc", "dotaRecordMatchStateHistory", dispatcher.DotaRecordMatchStateHistory)
+   453 |             .RegisterHostFunction("gc", "dotaRecordSpectatorCount", dispatcher.DotaRecordSpectatorCount)
+   454 |             .RegisterHostFunction("gc", "dotaRecordLiveScoreboard", dispatcher.DotaRecordLiveScoreboard)
+   455 |             .RegisterHostFunction("gc", "dotaSavePlayerReport", dispatcher.DotaSavePlayerReport)
+   456 |             .RegisterHostFunction("gc", "dotaPartyCurrent", _ => dispatcher.RequireCurrent().DotaPartyCurrent())
+   457 |             .RegisterHostFunction("gc", "dotaPartyById", dispatcher.DotaPartyById)
+   458 |             .RegisterHostFunction("gc", "dotaPartyEnsureCurrent", dispatcher.DotaPartyEnsureCurrent)
+   459 |             .RegisterHostFunction("gc", "dotaPartyAddMember", dispatcher.DotaPartyAddMember)
+   460 |             .RegisterHostFunction("gc", "dotaPartyRemoveMember", dispatcher.DotaPartyRemoveMember)
+   461 |             .RegisterHostFunction("gc", "dotaPartyDelete", dispatcher.DotaPartyDelete)
+   462 |             .RegisterHostFunction("gc", "dotaPartySetLeader", dispatcher.DotaPartySetLeader)
+   463 |             .RegisterHostFunction("gc", "dotaPartySetCoach", dispatcher.DotaPartySetCoach)
+   464 |             .RegisterHostFunction("gc", "dotaPartySetPing", dispatcher.DotaPartySetPing)
+   465 |             .RegisterHostFunction("gc", "dotaPartyStartReadyCheck", dispatcher.DotaPartyStartReadyCheck)
+   466 |             .RegisterHostFunction("gc", "dotaPartyAcknowledgeReadyCheck", dispatcher.DotaPartyAcknowledgeReadyCheck)
+   467 |             .RegisterHostFunction("gc", "dotaPartyCreateInvite", dispatcher.DotaPartyCreateInvite)
+   468 |             .RegisterHostFunction("gc", "dotaPartyTakeInvite", dispatcher.DotaPartyTakeInvite)
+   469 |             .RegisterHostFunction("gc", "dotaPartyInvitesForTarget", dispatcher.DotaPartyInvitesForTarget)
+   470 |             .RegisterHostFunction("gc", "dotaPartyDeleteInvitesForTarget", dispatcher.DotaPartyDeleteInvitesForTarget)
+   471 |             .RegisterHostFunction("gc", "dotaPartyDeleteInvitesForParty", dispatcher.DotaPartyDeleteInvitesForParty)
+   472 |             .RegisterHostFunction("gc", "dotaPartyPruneInvitesCreatedBefore", dispatcher.DotaPartyPruneInvitesCreatedBefore)
+   473 |             .RegisterHostFunction("gc", "dotaPartyUserExists", dispatcher.DotaPartyUserExists)
+   474 |             .RegisterHostFunction("gc", "dotaPartyUserOnline", dispatcher.DotaPartyUserOnline)
+   475 |             .RegisterHostFunction("gc", "dotaQueueGcMessage", dispatcher.DotaQueueGcMessage)
+   476 |             .RegisterHostFunction("gc", "dotaPublishMatchSnapshot", dispatcher.DotaPublishMatchSnapshot)
+   477 |             .RegisterHostFunction("gc", "dotaListMatchSnapshots", dispatcher.DotaListMatchSnapshots)
+   478 |             .RegisterHostFunction("gc", "dotaRemoveMatchSnapshot", dispatcher.DotaRemoveMatchSnapshot)
+   479 |             .RegisterHostFunction("gc", "dotaStartDedicatedServer", dispatcher.DotaStartDedicatedServer)
+   480 |             .RegisterHostFunction("gc", "dotaReleaseDedicatedServer", dispatcher.DotaReleaseDedicatedServer)
+   481 |             .RegisterHostFunction("gc", "dotaResolveGameServerConnectIp", dispatcher.DotaResolveGameServerConnectIp)
+   482 |             .RegisterHostFunction("gc", "dotaResolveGameServerConnectIps", dispatcher.DotaResolveGameServerConnectIps);
+   483 |     }
+   484 | 
+   485 |     private static string GetScriptCacheKey(GameCoordinatorAppDefinition app)
+   486 |     {
+
+
+============================================================
+GameCoordinatorScriptPlugin.cs :: host registration
+============================================================
+   285 |                 "deadlockHeroStats",
+   286 |                 dispatcher.DeadlockHeroStats)
+   287 |             .RegisterHostFunction(
+   288 |                 "gc",
+   289 |                 "deadlockEnsurePlayer",
+   290 |                 dispatcher.DeadlockEnsurePlayer)
+   291 |             // SKYNET_DEADLOCK_RANKED_DB_HOST_REGISTER_V1
+   292 |             .RegisterHostFunction(
+   293 |                 "gc",
+   294 |                 "deadlockRankedSocache",
+   295 |                 args =>
+   296 |                     dispatcher
+   297 |                         .RequireCurrent()
+   298 |                         .DeadlockRankedSocache(
+   299 |                             args
+   300 |                         )
+   301 |             )
+   302 |             // SKYNET_DEADLOCK_MATCH_HISTORY_DB_HOST_REGISTER_V1
+   303 |             .RegisterHostFunction(
+   304 |                 "gc",
+   305 |                 "deadlockMatchHistory",
+   306 |                 args =>
+   307 |                     dispatcher
+   308 |                         .RequireCurrent()
+   309 |                         .DeadlockMatchHistory(
+   310 |                             args
+   311 |                         )
+   312 |             )
+   313 | // SKYNET_DEADLOCK_DEDICATED_HOST_REGISTER_V1
+   314 |             .RegisterHostFunction(
+   315 |                 "gc",
+   316 |                 "deadlockStartDedicatedServer",
+   317 |                 dispatcher.DeadlockStartDedicatedServer
+   318 |             )
+   319 |             .RegisterHostFunction(
+   320 |                 "gc",
+   321 |                 "deadlockDedicatedServerState",
+   322 |                 dispatcher.DeadlockDedicatedServerState
+   323 |             )
+   324 |             .RegisterHostFunction(
+   325 |                 "gc",
+   326 |                 "deadlockReleaseDedicatedServer",
+   327 |                 dispatcher.DeadlockReleaseDedicatedServer
+   328 |             )
+   329 |             // SKYNET_DEADLOCK_POST_SIGNOUT_DELAYED_RELEASE_V1_REGISTER
+   330 |             .RegisterHostFunction(
+
+
+============================================================
+modules/RequestDeadlockGetMatchHistory.ts :: FULL CURRENT FILE
+============================================================
+import {
+    Route
+} from "../framework/gc";
+
+// SKYNET_DEADLOCK_MATCH_HISTORY_V11_PROFILE_ACCOUNT
+
+export const RequestDeadlockGetMatchHistoryRoute: Route = {
+    requestId: 9112,
+
+    request: {
+        name: "CMsgClientToGCGetMatchHistory"
+    },
+
+    responseId: 9113,
+
+    response: {
+        name: "CMsgClientToGCGetMatchHistoryResponse"
+    }
+};
+
+export const requestDeadlockGetMatchHistory =
+(ctx: any): void => {
+    const request =
+        ctx.request;
+
+    const gameMode =
+        request.game_mode ??
+        1;
+
+    const matchMode =
+        request.match_mode ??
+        1;
+
+    const rankedType =
+        request.ranked_type ??
+        0;
+
+    const rankInterval =
+        request.rank_interval ??
+        0;
+
+    const isRanked =
+        rankedType !== 0 ||
+        rankInterval !== 0;
+
+    /*
+     * 9112 explicitly contains account_id.
+     *
+     * When viewing another profile, this is the profile owner's
+     * AccountId and MUST be used instead of the current GC session.
+     *
+     * account_id == 0 still means "current GC account" and is resolved
+     * by the C# deadlockMatchHistory host bridge.
+     */
+    const targetAccountId =
+        request.account_id ??
+        0;
+
+    const rows: any =
+        deadlockMatchHistory(
+            targetAccountId
+        );
+
+    log(
+        "[9112-DB] requested_account_id=" +
+        targetAccountId +
+        " source_rows=" +
+        rows.length
+    );
+
+    const matches: any[] =
+        [];
+
+    let index =
+        0;
+
+    while (
+        index < rows.length &&
+        index < 100
+    ) {
+        const row: any =
+            rows[index];
+
+        const rowGameMode =
+            row.gameMode === 0
+                ? gameMode
+                : row.gameMode;
+
+        const rowMatchMode =
+            row.matchMode === 0
+                ? matchMode
+                : row.matchMode;
+
+        if (
+            isRanked
+        ) {
+            /*
+             * Keep the already-proven ranked response shape.
+             *
+             * Ranked delta/badge are still temporary UI values until
+             * the real post-match RankedState lifecycle exists.
+             */
+            matches.push({
+                match_id:
+                    row.matchId,
+
+                hero_id:
+                    row.heroId,
+
+                match_duration_s:
+                    row.durationS,
+
+                start_time:
+                    row.startTime,
+
+                match_result:
+                    row.matchResult,
+
+                player_team:
+                    row.playerTeam,
+
+                player_kills:
+                    row.playerKills,
+
+                player_deaths:
+                    row.playerDeaths,
+
+                player_assists:
+                    row.playerAssists,
+
+                last_hits:
+                    0,
+
+                denies:
+                    0,
+
+                hero_level:
+                    0,
+
+                net_worth:
+                    0,
+
+                objectives_mask_team0:
+                    0n,
+
+                objectives_mask_team1:
+                    0n,
+
+                team_abandoned:
+                    false,
+
+                abandoned_time_s:
+                    0,
+
+                match_mode:
+                    rowMatchMode,
+
+                game_mode:
+                    rowGameMode,
+
+                not_scored:
+                    false,
+
+                game_mode_version:
+                    1,
+
+                player_match_outcome:
+                    row.playerMatchOutcome,
+
+                ranked_display_badge:
+                    1,
+
+                ranked_delta:
+                    25,
+
+                ranked_calibration_match:
+                    0,
+
+                ranked_used_demotion_protection:
+                    false
+            });
+        } else {
+            /*
+             * Non-ranked history intentionally contains no ranked_*
+             * fields. This preserves the existing V9 UI behavior.
+             */
+            matches.push({
+                match_id:
+                    row.matchId,
+
+                hero_id:
+                    row.heroId,
+
+                match_duration_s:
+                    row.durationS,
+
+                start_time:
+                    row.startTime,
+
+                match_result:
+                    row.matchResult,
+
+                player_team:
+                    row.playerTeam,
+
+                player_kills:
+                    row.playerKills,
+
+                player_deaths:
+                    row.playerDeaths,
+
+                player_assists:
+                    row.playerAssists,
+
+                last_hits:
+                    0,
+
+                denies:
+                    0,
+
+                hero_level:
+                    0,
+
+                net_worth:
+                    0,
+
+                objectives_mask_team0:
+                    0n,
+
+                objectives_mask_team1:
+                    0n,
+
+                team_abandoned:
+                    false,
+
+                abandoned_time_s:
+                    0,
+
+                match_mode:
+                    rowMatchMode,
+
+                game_mode:
+                    rowGameMode,
+
+                not_scored:
+                    false,
+
+                game_mode_version:
+                    1,
+
+                player_match_outcome:
+                    row.playerMatchOutcome
+            });
+        }
+
+        index =
+            index + 1;
+    }
+
+    log(
+        "[9112-DB] game_mode=" +
+        gameMode +
+        " match_mode=" +
+        matchMode +
+        " ranked=" +
+        isRanked +
+        " source_rows=" +
+        rows.length +
+        " sent=" +
+        matches.length
+    );
+
+    ctx.reply({
+        result:
+            1,
+
+        continue_cursor:
+            0n,
+
+        matches:
+            matches
+    });
+
+    log(
+        "[9113-DB] sent=" +
+        matches.length
+    );
+};
+
+export default requestDeadlockGetMatchHistory;
+
+
+
+============================================================
+modules/RequestDeadlockMatchSignoutRaw.ts :: FULL CURRENT FILE
+============================================================
+/*
+ * Deadlock 1422450
+ *
+ * RAW GameServer pre-dispatch:
+ *
+ *   10014 CMsgServerToGCMatchSignout
+ *      ->
+ *   10015 CMsgServerToGCMatchSignoutResponse
+ *
+ * Current protobuf:
+ *
+ * message CMsgServerToGCMatchSignoutResponse {
+ *     enum ESignoutResult {
+ *         k_ESignout_Failed_Retry = 1;
+ *         k_ESignout_Failed_NoRetry = 2;
+ *         k_ESignout_Failed_InFlight = 3;
+ *         k_ESignout_Success = 4;
+ *         k_ESignout_Success_AlreadySignedOut = 5;
+ *     }
+ *
+ *     optional ESignoutResult result = 1;
+ * }
+ *
+ * Minimal successful protobuf:
+ *
+ *   field 1 / varint / value 4
+ *   08 04
+ *
+ * Base64:
+ *   CAQ=
+ *
+ * IMPORTANT:
+ * 10014 is intentionally NOT decoded or persisted in V1.
+ * This experiment only completes the GameServer signout handshake.
+ */
+
+export function requestDeadlockMatchSignoutRaw(): boolean {
+    if (
+        messageType() !=
+        10014
+    ) {
+        return false;
+    }
+
+    log(
+        "[10014-GS] RAW MatchSignout received"
+    );
+
+    /*
+     * CMsgServerToGCMatchSignoutResponse
+     *
+     * result = k_ESignout_Success
+     *
+     * field 1 = 4
+     *
+     * protobuf:
+     *   08 04
+     */
+    const response = [
+        8,
+        4
+    ];
+
+    reply(
+        10015,
+        response,
+        true
+    );
+
+    // === SKYNET_DEADLOCK_10014_DELAYED_RELEASE_V1_BEGIN ===
+    //
+    // IMPORTANT:
+    // reply(10015) above only queues the HTTP response.
+    //
+    // Do NOT call synchronous deadlockReleaseDedicatedServer()
+    // here: that could kill the requester before 10015 reaches it.
+    //
+    // The C# host parses lobby_id directly from the current
+    // 10014 BodyBase64, verifies Supervisor ownership, then
+    // performs Release() after a short delay.
+    //
+    const releaseScheduled: any =
+        deadlockScheduleCurrentMatchSignoutRelease(
+            35000,
+            "match-signout-success"
+        );
+
+    log(
+        "[10014-GS] delayed dedicated release scheduled=" +
+        releaseScheduled +
+        " delay_ms=35000"
+    );
+
+    // === SKYNET_DEADLOCK_10014_DELAYED_RELEASE_V1_END ===
+
+    log(
+        "[10014-GS] replied 10015 result=Success(4) bytes=2"
+    );
+
+    return true;
+}
+
+
+============================================================
+COLUMN NAME PRESENCE CHECK
+============================================================
+MatchId                 FOUND
+AccountId               FOUND
+HeroId                  FOUND
+Team                    FOUND
+Kills                   FOUND
+Deaths                  FOUND
+Assists                 FOUND
+WinningTeam             FOUND
+DurationS               NOT FOUND
+
+OPTIONAL / HISTORY-SPECIFIC:
+PlayerSlot              NOT FOUND
+PlayerMatchOutcome      NOT FOUND
+MatchResult             NOT FOUND
+GameMode                FOUND
+MatchMode               FOUND
+StartedAtUtc            FOUND
+EndedAtUtc              FOUND
+CreatedAtUtc            FOUND
+SteamId                 FOUND
+Won                     FOUND
+
+============================================================
+EXISTING MATCH WRITE CHECK
+============================================================
+INSERT INTO Matches: NOT FOUND
+INSERT INTO MatchPlayers: NOT FOUND
+
+============================================================
+10014 BASELINE CHECK
+============================================================
+10015 Success bytes [8,4]: YES
+35s delayed release: YES
+Existing persistence call in raw 10014: NO
