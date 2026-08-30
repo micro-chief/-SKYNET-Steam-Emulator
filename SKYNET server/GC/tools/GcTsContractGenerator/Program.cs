@@ -154,6 +154,10 @@ static IEnumerable<Type> LoadContractTypes(
     foreach (var source in sources)
     {
         NormalizeSource(source);
+        if (!source.GenerateTypeScript)
+        {
+            continue;
+        }
         var assembly = ResolveContractAssembly(options, appRootFullPath, source, defaultLoadContext, defaultAssembly, loadedAssemblies);
         foreach (var type in GetLoadableTypes(assembly).Where(type => MatchesSource(type, source)))
         {
@@ -705,6 +709,7 @@ internal sealed class ProtoContractOptions
 internal sealed class ContractSource
 {
     public string? Assembly { get; set; }
+    public bool GenerateTypeScript { get; set; } = true;
     public List<string> TypeNames { get; set; } = new();
     public List<string> TypeNamePrefixes { get; set; } = new();
     public List<string> ContractNamePrefixes { get; set; } = new();

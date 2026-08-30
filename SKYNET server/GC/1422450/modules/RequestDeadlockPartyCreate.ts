@@ -1,4 +1,5 @@
 import {
+    deadlockServices,
     encodeProto
 } from "../framework/gc";
 
@@ -118,7 +119,9 @@ export function requestDeadlockPartyCreate(
     const clientVersion =
         request.party_mm_info
             ?.client_version ??
-        1;
+        deadlockServices.build.clientVersion(
+            ctx.accountId
+        );
 
     const platform =
         request.party_mm_info
@@ -1315,7 +1318,7 @@ const partyBytes =
                 members: [
                     {
                         compatibility_version:
-                            6677
+                            clientVersion
                     }
                 ]
             }

@@ -1,7 +1,9 @@
 import {
     Route,
+    deadlockServices,
     encodeProto
 } from "../framework/gc";
+import { Msg, Proto } from "../generated/deadlock";
 
 export const ClientHelloRoute: Route = {
     requestId: 4006,
@@ -18,7 +20,9 @@ function firstCache(
     request: any
 ): any {
     const caches =
-        request.socache_have_versions ?? [];
+        request.socacheHaveVersions ??
+        request.socache_have_versions ??
+        [];
 
     if (caches.length > 0) {
         return caches[0];
@@ -32,7 +36,9 @@ function serviceCache(
     serviceId: number
 ): any {
     const caches =
-        request.socache_have_versions ?? [];
+        request.socacheHaveVersions ??
+        request.socache_have_versions ??
+        [];
 
     for (
         let i = 0;
@@ -60,9 +66,16 @@ export const requestClientHello =
     const request =
         ctx.request;
 
+    const clientVersion =
+        deadlockServices.build.recordClientVersion(
+            ctx.accountId,
+            request.version ?? 0
+        );
+
     // === SKYNET_CLIENTHELLO_SOID_DIAGNOSTICS_BEGIN ===
 
     const diagnosticCaches =
+        request.socacheHaveVersions ??
         request.socache_have_versions ??
         [];
 
@@ -193,10 +206,14 @@ export const requestClientHello =
     // -------------------------------------------------------------------------
 
     ctx.send(
-        4009,
-        "CMsgConnectionStatus",
+        Msg.GCClientConnectionStatus,
+        Proto.DeadlockConnectionStatus,
         {
             status: 3,
+            clientSessionNeed:
+                request.clientSessionNeed ??
+                request.client_session_need ??
+                0
         }
     );
 
@@ -205,6 +222,18 @@ export const requestClientHello =
     // -------------------------------------------------------------------------
 
     const welcome: any = {
+        gameData:
+            ctx.encode(
+                Proto.DeadlockClientWelcomeGameData,
+                {
+                    compatibilityVersion:
+                        clientVersion,
+                    regionMode:
+                        1,
+                    pgiVerified:
+                        true
+                }
+            ),
             uptodate_subscribed_caches: [
                 {
                     version:
@@ -227,7 +256,7 @@ export const requestClientHello =
                 }
             ],
         version:
-            request.version ?? 1
+            clientVersion
     };
 
     if (cache0 !== null) {
@@ -301,10 +330,13 @@ export const requestClientHello =
         ctx.steamId
     );
 
-    ctx.send(
-        4004,
-        "CMsgClientWelcome",
-        welcome
+    ctx.reply(welcome);
+
+    ctx.logger.info(
+        "Deadlock GC session established for account " +
+            ctx.accountId +
+            " compatibilityVersion=" +
+            clientVersion
     );
 
     // -------------------------------------------------------------------------

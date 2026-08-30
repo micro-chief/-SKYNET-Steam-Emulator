@@ -1,5 +1,6 @@
 // SKYNET_DEADLOCK_CLIENT_ASSIGN_TYPESHARP_GLOBALS_V113
 import {
+    deadlockServices,
     encodeProto
 } from "../framework/gc";
 
@@ -21,9 +22,6 @@ const LOBBY_SO_TYPE_ID =
 
 const PARTY_SO_TYPE_ID =
     105;
-
-const SERVER_VERSION =
-    6677;
 
 // SKYNET_DEADLOCK_MULTIPLAYER_CONNECT_IP_V18
 // Prefer the address registered by the dedicated reservation. Loopback remains
@@ -416,7 +414,7 @@ export function emitDeadlockClientAssignment(
             gameMode,
 
         compatibility_version:
-            SERVER_VERSION,
+            deadlockServices.build.clientVersion(),
 
         server_steam_id:
             serverSteamId,
@@ -431,7 +429,7 @@ export function emitDeadlockClientAssignment(
             serverPort,
 
         server_version:
-            SERVER_VERSION,
+            deadlockServices.build.clientVersion(),
 
         safe_to_abandon:
             true,
@@ -457,7 +455,7 @@ export function emitDeadlockClientAssignment(
             gameMode,
 
         compatibility_version:
-            SERVER_VERSION,
+            deadlockServices.build.clientVersion(),
 
         server_steam_id:
             serverSteamId,
@@ -472,7 +470,7 @@ export function emitDeadlockClientAssignment(
             serverPort,
 
         server_version:
-            SERVER_VERSION,
+            deadlockServices.build.clientVersion(),
 
         safe_to_abandon:
             true,
@@ -998,7 +996,7 @@ export function emitDeadlockClientLobbyPostMatch(
             1,
 
         compatibility_version:
-            SERVER_VERSION,
+            deadlockServices.build.clientVersion(),
 
         server_steam_id:
             deadlockClientMatchServerSteamId,
@@ -1013,7 +1011,7 @@ export function emitDeadlockClientLobbyPostMatch(
             deadlockClientMatchServerPort,
 
         server_version:
-            SERVER_VERSION,
+            deadlockServices.build.clientVersion(),
 
         safe_to_abandon:
             safeToAbandon,

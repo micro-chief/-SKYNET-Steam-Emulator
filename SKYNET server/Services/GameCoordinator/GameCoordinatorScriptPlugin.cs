@@ -315,6 +315,14 @@ throw new InvalidOperationException(
                 "gc",
                 "deadlockEnsurePlayer",
                 dispatcher.DeadlockEnsurePlayer)
+            .RegisterHostFunction(
+                "gc",
+                "deadlockRecordClientVersion",
+                dispatcher.DeadlockRecordClientVersion)
+            .RegisterHostFunction(
+                "gc",
+                "deadlockClientVersion",
+                dispatcher.DeadlockClientVersion)
             // SKYNET_DEADLOCK_RANKED_DB_HOST_REGISTER_V1
             .RegisterHostFunction(
                 "gc",
@@ -775,6 +783,20 @@ internal sealed class ScriptHostDispatcher
             .DeadlockEnsurePlayer(
                 args
             );
+    }
+
+    public TsValue? DeadlockRecordClientVersion(
+        TsValue[] args)
+    {
+        return RequireCurrent()
+            .DeadlockRecordClientVersion(args);
+    }
+
+    public TsValue? DeadlockClientVersion(
+        TsValue[] args)
+    {
+        return RequireCurrent()
+            .DeadlockClientVersion(args);
     }
 
     public TsValue? DeadlockAccountStats(
@@ -10089,6 +10111,42 @@ internal sealed class ScriptExchangeHost
 
     // SKYNET_DEADLOCK_REAL_9165_DB_V4
     // SKYNET_DEADLOCK_AUTO_ENSURE_PLAYER_V2
+    public TsValue DeadlockRecordClientVersion(
+        TsValue[] args)
+    {
+        var accountId =
+            args.Length > 0
+                ? CheckedToUInt32(
+                    ToNumber(args[0], "deadlockRecordClientVersion.accountId"),
+                    "deadlockRecordClientVersion.accountId")
+                : _context.AccountId;
+        var version =
+            args.Length > 1
+                ? CheckedToUInt32(
+                    ToNumber(args[1], "deadlockRecordClientVersion.version"),
+                    "deadlockRecordClientVersion.version")
+                : 0;
+
+        return TsValue.FromInt64(
+            DeadlockGcRuntimeServices.RecordClientCompatibilityVersion(
+                accountId,
+                version));
+    }
+
+    public TsValue DeadlockClientVersion(
+        TsValue[] args)
+    {
+        var accountId =
+            args.Length > 0
+                ? CheckedToUInt32(
+                    ToNumber(args[0], "deadlockClientVersion.accountId"),
+                    "deadlockClientVersion.accountId")
+                : _context.AccountId;
+
+        return TsValue.FromInt64(
+            DeadlockGcRuntimeServices.GetClientCompatibilityVersion(accountId));
+    }
+
     public TsValue DeadlockEnsurePlayer(
         TsValue[] args)
     {

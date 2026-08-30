@@ -13,7 +13,8 @@ import {
     getCurrentDeadlockMatchLobbyId
 } from "./DeadlockMatchLobbyState";
 import {
-    Route
+    Route,
+    deadlockServices
 } from "../framework/gc";
 
 
@@ -1189,7 +1190,7 @@ function sky101EncodeServerCommonLobby(
     sky102UInt(
         output,
         5,
-        6677
+        deadlockServices.build.clientVersion()
     );
 
     sky102Fixed64(
@@ -1216,7 +1217,7 @@ function sky101EncodeServerCommonLobby(
     sky102UInt(
         output,
         13,
-        6677
+        deadlockServices.build.clientVersion()
     );
 
     log(

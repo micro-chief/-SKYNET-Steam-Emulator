@@ -47,6 +47,7 @@ public static class GcScriptSelfCheck
 {
     private const uint DotaAppId = 570;
     private const uint Cs2AppId = 730;
+    private const uint DeadlockAppId = 1422450;
     private const ulong TestSteamId = 76561197960287930UL;
 
     public static bool RunCs2(Action<string> write)
@@ -145,6 +146,14 @@ public static class GcScriptSelfCheck
             SteamId = TestSteamId,
             AccountId = 15892202,
             PersonaName = "GcScriptSelfCheck CS2",
+            ClientIp = "127.0.0.1"
+        };
+        var deadlockContext = new GameCoordinatorContext
+        {
+            AppId = DeadlockAppId,
+            SteamId = TestSteamId,
+            AccountId = 15892202,
+            PersonaName = "GcScriptSelfCheck Deadlock",
             ClientIp = "127.0.0.1"
         };
         var queuedMessages = new List<(ulong SteamId, ApiGCMessage Message)>();
@@ -295,6 +304,7 @@ public static class GcScriptSelfCheck
         ok &= ExpectCs2BootstrapFlow(plugin, cs2Context, write);
         ok &= ExpectCs2InventoryScreenRequests(plugin, cs2Context, write);
         ok &= ExpectCs2MatchmakingFlow(plugin, cs2Context, write);
+        ok &= ExpectDeadlockBootstrapFlow(plugin, deadlockContext, write);
 
         foreach (var entry in trace.GetSince(0))
         {
@@ -302,6 +312,52 @@ public static class GcScriptSelfCheck
         }
 
         write(ok ? "PASS" : "FAIL");
+        return ok;
+    }
+
+    private static bool ExpectDeadlockBootstrapFlow(
+        GameCoordinatorScriptPlugin plugin,
+        GameCoordinatorContext context,
+        Action<string> write)
+    {
+        const uint clientVersion = 6684;
+        var request = new DeadlockClientHello
+        {
+            Version = clientVersion,
+            ClientSessionNeed = 1
+        };
+        var response = plugin.Exchange(context, Request(4006, Serialize(request)));
+        var messageTypes = response.Messages.Select(message => message.MessageType).ToArray();
+        var welcomeMessage = response.Messages.SingleOrDefault(message => message.MessageType == 4004);
+        var welcome = welcomeMessage == null
+            ? null
+            : Deserialize<DeadlockClientWelcome>(welcomeMessage.PayloadBase64);
+        var gameData = welcome?.GameData is { Length: > 0 }
+            ? DeserializeBytes<DeadlockClientWelcomeGameData>(welcome.GameData)
+            : null;
+        var serverHello = plugin.Exchange(context, Request(4007, Serialize(request)));
+        var accountStats = plugin.Exchange(context, Request(9164));
+        var profileCard = plugin.Exchange(context, Request(9024));
+        var ok = response.Handled
+            && messageTypes.Contains(4009u)
+            && messageTypes.Contains(4004u)
+            && welcome?.Version == clientVersion
+            && gameData?.CompatibilityVersion == clientVersion
+            && gameData.RegionMode == 1
+            && gameData.PgiVerified
+            && DeadlockGcRuntimeServices.GetClientCompatibilityVersion(context.AccountId) == clientVersion
+            && serverHello.Handled
+            && serverHello.Messages.Any(message => message.MessageType == 4005)
+            && accountStats.Handled
+            && accountStats.Messages.Any(message => message.MessageType == 9165)
+            && profileCard.Handled
+            && profileCard.Messages.Any(message => message.MessageType == 9025);
+
+        write(
+            $"Deadlock bootstrap -> handled={response.Handled}, messages=[{string.Join(',', messageTypes)}], " +
+            $"welcomeVersion={welcome?.Version}, compatibilityVersion={gameData?.CompatibilityVersion}, " +
+            $"region={gameData?.RegionMode}, pgi={gameData?.PgiVerified}, " +
+            $"legacyRoutes=4007:{serverHello.Handled}/9164:{accountStats.Handled}/9024:{profileCard.Handled}, ok={ok}");
         return ok;
     }
 

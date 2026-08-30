@@ -1,4 +1,5 @@
 import { HandlerContext,
+    deadlockServices,
     encodeProto
 } from "../framework/gc";
 
@@ -38,6 +39,9 @@ export function requestDeadlockGetRankData(
         CMsgGCToClientGetRankDataResponse
     >,
 ): boolean {
+    const clientVersion =
+        deadlockServices.build.clientVersion(ctx.accountId);
+
     // SKYNET_RANK_DATA_OFFICIAL_CAPTURE_V1
     ctx.reply({
         result:
@@ -118,7 +122,7 @@ export function requestDeadlockGetRankData(
             0,
 
         valid_client_versions: [
-            6677
+            clientVersion
         ],
 
         active_match_count:
@@ -158,7 +162,8 @@ export function requestDeadlockGetRankData(
     );
 
     log(
-        "[9019] valid_client_version=6677"
+        "[9019] valid_client_version=" +
+            clientVersion
     );
 
     log(

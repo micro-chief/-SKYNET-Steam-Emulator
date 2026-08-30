@@ -58,6 +58,9 @@ Every app may define `gc.json`:
   so a misconfigured app cannot silently run with missing globals.
 - `protoContracts.sources` controls which protobuf contract assemblies/types are
   visible to that app. Runtime type names are resolved per AppID.
+- A source with `"generateTypeScript": false` remains visible to the runtime
+  but is omitted from generated TypeScript. This supports incremental migrations
+  where capture-backed legacy modules still encode contracts by runtime name.
 - `typeScript` tells the shared generator where to read route metadata and where
   to write generated TypeScript contracts.
 

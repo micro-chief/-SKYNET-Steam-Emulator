@@ -6,12 +6,25 @@
     "preferredNamespaces": ["SKYNET.Server.GameCoordinator.Citadel", ""],
     "sources": [
       {
-        "assembly": "server"
+        "assembly": "server",
+        "typeNames": [
+          "DeadlockSOIDOwner",
+          "DeadlockSOCacheHaveVersion",
+          "DeadlockSOCacheSubscriptionCheck",
+          "DeadlockClientHello",
+          "DeadlockClientWelcome",
+          "DeadlockConnectionStatus",
+          "DeadlockClientWelcomeGameData"
+        ]
+      },
+      {
+        "assembly": "server",
+        "generateTypeScript": false
       }
     ]
   },
   "typeScript": {
-    "generatedContracts": "generated/protobuf.ts",
+    "generatedContracts": "generated/deadlock.ts",
     "extraMessageIds": "contracts/extra-message-ids.json",
     "routes": "contracts/routes.json"
   },

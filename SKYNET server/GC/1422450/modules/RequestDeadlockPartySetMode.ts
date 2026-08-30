@@ -1,4 +1,5 @@
 import {
+    deadlockServices,
     encodeProto
 } from "../framework/gc";
 
@@ -145,7 +146,9 @@ export function requestDeadlockPartySetMode(
                     0,
 
                 compatibility_version:
-                    1,
+                    deadlockServices.build.clientVersion(
+                        ctx.accountId
+                    ),
 
                 platform:
                     0,

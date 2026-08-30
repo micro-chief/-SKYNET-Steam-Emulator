@@ -234,7 +234,7 @@ const OFFICIAL_STATS: any[] = [
 ];
 
 export const requestDeadlockGetAccountStats =
-(ctx: any): void => {
+(ctx: any): boolean => {
 
     // SKYNET_DEADLOCK_9165_DB_SINGLE_SOURCE_V3
     //

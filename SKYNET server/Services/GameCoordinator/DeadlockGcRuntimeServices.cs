@@ -16,6 +16,41 @@ internal static class DeadlockGcRuntimeServices
     public const string HostServiceName =
         "deadlock";
 
+    private static readonly
+        System.Collections.Concurrent.ConcurrentDictionary<uint, uint>
+        ClientCompatibilityVersions =
+            new();
+
+    private static int latestClientCompatibilityVersion;
+
+    public static uint RecordClientCompatibilityVersion(
+        uint accountId,
+        uint version)
+    {
+        if (accountId == 0 || version == 0)
+        {
+            return GetClientCompatibilityVersion(accountId);
+        }
+
+        ClientCompatibilityVersions[accountId] = version;
+        System.Threading.Interlocked.Exchange(
+            ref latestClientCompatibilityVersion,
+            unchecked((int)version));
+        return version;
+    }
+
+    public static uint GetClientCompatibilityVersion(uint accountId)
+    {
+        if (accountId != 0 &&
+            ClientCompatibilityVersions.TryGetValue(accountId, out var version))
+        {
+            return version;
+        }
+
+        return unchecked((uint)System.Threading.Volatile.Read(
+            ref latestClientCompatibilityVersion));
+    }
+
     // SKYNET_DEADLOCK_DB_HOST_BRIDGE_V3
 
     public static Func<uint, string>? AccountStatsJsonProvider

@@ -4,6 +4,7 @@ import {
 } from "../generated/protobuf";
 
 import {
+    deadlockServices,
     encodeProto,
     HandlerContext,
     Route
@@ -335,7 +336,11 @@ export const requestDeadlockStartMatchmaking = (
                 0,
 
             compatibility_version:
-                1,
+                clientVersion > 0
+                    ? clientVersion
+                    : deadlockServices.build.clientVersion(
+                        ctx.accountId
+                    ),
 
             platform:
                 0,
