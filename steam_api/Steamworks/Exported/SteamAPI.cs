@@ -189,7 +189,7 @@ namespace SKYNET.Steamworks.Exported
         /// </summary>
         internal static void PrepareLegacyGameServerExport()
         {
-            if (SteamEmulator.AppID != 500 || legacyGameServerExportPrepared)
+            if (SteamEmulator.InternalAppId != 500 || legacyGameServerExportPrepared)
             {
                 return;
             }
@@ -232,7 +232,7 @@ namespace SKYNET.Steamworks.Exported
 
         internal static void PublishLegacyGameServerClient()
         {
-            if (SteamEmulator.AppID != 500)
+            if (SteamEmulator.InternalAppId != 500)
             {
                 return;
             }
@@ -897,7 +897,7 @@ namespace SKYNET.Steamworks.Exported
             // wrappers therefore expect the exact client vtable that shipped with
             // their game. Left 4 Dead (AppID 500) uses SteamClient009; returning the
             // modern vtable shifts every slot after GetISteamMatchmaking.
-            string version = SteamEmulator.AppID == 500 ? "SteamClient009" : "SteamClient023";
+            string version = SteamEmulator.InternalAppId == 500 ? "SteamClient009" : "SteamClient023";
             return InterfaceManager.FindOrCreateInterface(version);
         }
 

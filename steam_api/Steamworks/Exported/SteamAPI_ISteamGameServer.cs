@@ -364,7 +364,7 @@ namespace SKYNET.Steamworks.Exported
                 usGamePort,
                 usQueryPort,
                 GetLegacyServerFlags(eServerMode),
-                SteamEmulator.AppID,
+                SteamEmulator.InternalAppId,
                 ReadAnsiArgument(pchVersionString));
             if (initialized)
             {
@@ -389,7 +389,7 @@ namespace SKYNET.Steamworks.Exported
                 usGamePort,
                 usQueryPort,
                 GetLegacyServerFlags(eServerMode),
-                SteamEmulator.AppID,
+                SteamEmulator.InternalAppId,
                 ReadAnsiArgument(pchVersionString));
             SteamEmulator.SteamGameServer.SetSpectatorPort(usSpectatorPort);
             if (initialized)

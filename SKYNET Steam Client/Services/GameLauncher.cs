@@ -40,6 +40,7 @@ public sealed class GameLauncher
 {
     private const string BackupSuffix = ".skynet-orig";
     private const string MarkerSuffix = ".skynet-injected";
+    private const int PreviousPayloadShadowsToKeep = 3;
 
     private static string PayloadDll(GameArch arch)
     {
@@ -151,7 +152,15 @@ public sealed class GameLauncher
             File.WriteAllBytes(shadowPath, payloadBytes);
         }
 
-        CleanupPayloadShadows(shadowRoot, hash);
+        try
+        {
+            Directory.SetLastWriteTimeUtc(shadowDir, DateTime.UtcNow);
+        }
+        catch
+        {
+        }
+
+        CleanupPayloadShadows(shadowRoot, hash, payloadFileName);
         return shadowPath;
     }
 
@@ -162,7 +171,7 @@ public sealed class GameLauncher
         return BitConverter.ToString(hashBytes).Replace("-", string.Empty).ToLowerInvariant();
     }
 
-    private static void CleanupPayloadShadows(string shadowRoot, string activeHash)
+    private static void CleanupPayloadShadows(string shadowRoot, string activeHash, string payloadFileName)
     {
         try
         {
@@ -171,14 +180,17 @@ public sealed class GameLauncher
                 return;
             }
 
-            foreach (var directory in Directory.GetDirectories(shadowRoot))
-            {
-                if (string.Equals(Path.GetFileName(directory), activeHash, StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
+            var shadows = Directory.GetDirectories(shadowRoot)
+                .Where(directory => File.Exists(Path.Combine(directory, payloadFileName)))
+                .OrderByDescending(directory =>
+                    string.Equals(Path.GetFileName(directory), activeHash, StringComparison.OrdinalIgnoreCase)
+                        ? DateTime.MaxValue
+                        : Directory.GetLastWriteTimeUtc(directory))
+                .ToArray();
 
-                TryDeleteOldShadow(directory);
+            foreach (var directory in shadows.Skip(PreviousPayloadShadowsToKeep + 1))
+            {
+                TryDeleteShadow(directory);
             }
         }
         catch
@@ -186,16 +198,10 @@ public sealed class GameLauncher
         }
     }
 
-    private static void TryDeleteOldShadow(string directory)
+    private static void TryDeleteShadow(string directory)
     {
         try
         {
-            var age = DateTime.UtcNow - Directory.GetLastWriteTimeUtc(directory);
-            if (age < TimeSpan.FromDays(1))
-            {
-                return;
-            }
-
             Directory.Delete(directory, recursive: true);
         }
         catch

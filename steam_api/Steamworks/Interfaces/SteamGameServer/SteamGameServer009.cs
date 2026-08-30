@@ -73,7 +73,7 @@ namespace SKYNET.Steamworks.Interfaces
                 unGamePort,
                 usQueryPort,
                 unServerFlags,
-                SteamEmulator.AppID,
+                SteamEmulator.InternalAppId,
                 ReadAnsi(pchVersion));
             SteamEmulator.SteamGameServer.SetModDir(ReadAnsi(pchGameDir));
             SteamEmulator.SteamGameServer.SetSpectatorPort(unSpectatorPort);
