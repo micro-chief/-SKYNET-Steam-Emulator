@@ -130,6 +130,7 @@ export const Msg: {
     DeadlockAllocateForMatchResponse: MessageId;
     DeadlockServerEnterMatchmaking: MessageId;
     DeadlockUpdateLobbyServerState: MessageId;
+    DeadlockServerUpdateMatchInfo: MessageId;
     DeadlockRequestPlayerHeroData: MessageId;
     DeadlockRequestPlayerHeroDataResponse: MessageId;
 } = {
@@ -167,8 +168,8 @@ export const Msg: {
     DeadlockPartyCreateResponse: 9124,
     DeadlockPartyLeave: 9125,
     DeadlockPartyLeaveResponse: 9126,
-    DeadlockPartyAction: 9127,
-    DeadlockPartyActionResponse: 9128,
+    DeadlockPartyAction: 9129,
+    DeadlockPartyActionResponse: 9130,
     DeadlockPartyStartMatch: 9131,
     DeadlockPartyStartMatchResponse: 9132,
     DeadlockPartySetReadyState: 9142,
@@ -197,6 +198,7 @@ export const Msg: {
     DeadlockAllocateForMatchResponse: 10022,
     DeadlockServerEnterMatchmaking: 10023,
     DeadlockUpdateLobbyServerState: 10025,
+    DeadlockServerUpdateMatchInfo: 10041,
     DeadlockRequestPlayerHeroData: 10044,
     DeadlockRequestPlayerHeroDataResponse: 10045,
 };

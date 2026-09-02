@@ -3378,7 +3378,7 @@ public sealed class DotaStatsRealtimeStatsSnapshot
     public ulong ServerSteamId { get; init; }
     public ulong MatchId { get; init; }
     public uint Timestamp { get; init; }
-    public uint GameTime { get; init; }
+    public int GameTime { get; init; }
     public uint GameState { get; init; }
     public uint GameMode { get; init; }
     public uint LobbyType { get; init; }

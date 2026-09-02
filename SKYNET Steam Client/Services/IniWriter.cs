@@ -57,6 +57,7 @@ public static class IniWriter
         sb.AppendLine("[Log Settings]");
         sb.AppendLine($"File = {B(s.LogToFile)}");
         sb.AppendLine($"Console = {B(s.LogToConsole)}");
+        sb.AppendLine($"TraceInterfaces = {B(s.TraceInterfaces)}");
         sb.AppendLine();
 
         sb.AppendLine("[Audio Settings]");

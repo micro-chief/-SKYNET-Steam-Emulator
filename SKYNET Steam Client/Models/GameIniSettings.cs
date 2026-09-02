@@ -24,6 +24,7 @@ public sealed class GameIniSettings
     // [Log Settings]
     public bool LogToFile { get; set; } = true;
     public bool LogToConsole { get; set; } = false;
+    public bool TraceInterfaces { get; set; } = false;
 
     // [Audio Settings]
     public bool EnableVoiceCapture { get; set; } = true;

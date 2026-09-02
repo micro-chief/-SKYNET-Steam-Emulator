@@ -61,6 +61,7 @@ import {
     CMsgServerToGCRequestPlayerRecentAccomplishmentsResponse,
     CSODOTALobby,
     CSODOTALobbyInvite,
+    CSODOTALobbyInvite_LobbyMember,
     CSODOTALobbyMember,
     CSODOTAServerLobby,
     CSODOTAServerStaticLobby,
@@ -355,12 +356,13 @@ export class Lobby {
             }
 
             refreshLobby(lobby, ctx.clock.now());
-            subscribeToLobbyObjectOnly(ctx, ctx.steamId, lobby);
+            subscribeToJoinedLobby(ctx, ctx.steamId, lobby);
             ctx.reply({ result: JOIN_SUCCESS });
-            // The joiner receives the full lobby in SOCacheSubscribed and the
-            // join result; existing members receive the lobby mutation as
-            // SOCacheUpdated so the host view changes without re-subscribing.
-            broadcastLobby(ctx, lobby, ctx.steamId, false);
+            // Membership SOs are parallel arrays indexed by CSODOTALobby.member_indices.
+            // Keep all four member-bearing objects in lockstep for the joiner and
+            // existing subscribers; otherwise the second member indexes past the
+            // host's create-time static arrays.
+            broadcastLobby(ctx, lobby, ctx.steamId, false, true);
             publishLobby(ctx.services.lobby, lobby);
             return true;
         }
@@ -463,14 +465,35 @@ export class Lobby {
             return true;
         }
 
+        const normalizedSlot = nextTeam === TEAM_POOL ? 0 : nextSlot;
+        const changed = member.team !== nextTeam
+            || member.slot !== normalizedSlot
+            || member.coachTeam !== TEAM_NONE
+            || member.leaverStatus !== LEAVER_NONE;
+        ctx.logger.info(
+            "lobby set team slot lobby=" + lobby.lobbyId
+            + " steam=" + ctx.steamId
+            + " from=" + member.team + ":" + member.slot
+            + " to=" + nextTeam + ":" + normalizedSlot
+            + " changed=" + changed
+        );
+
+        // Finish the request before publishing the resulting SO update. Dota can
+        // immediately echo the selected slot after receiving that update; treating
+        // the echo as an idempotent success prevents an update/request feedback loop.
+        ctx.reply({ eresult: SUCCESS });
+        if (!changed) {
+            return true;
+        }
+
         member.team = nextTeam;
-        member.slot = nextTeam === TEAM_POOL ? 0 : nextSlot;
+        member.slot = normalizedSlot;
         member.coachTeam = TEAM_NONE;
+        member.leaverStatus = LEAVER_NONE;
         member.lastSeen = ctx.clock.now();
         refreshLobby(lobby, ctx.clock.now());
         broadcastLobby(ctx, lobby, 0n, false);
         publishLobby(ctx.services.lobby, lobby);
-        ctx.reply({ eresult: SUCCESS });
         return true;
     }
 
@@ -614,7 +637,7 @@ export class Lobby {
             return true;
         }
 
-        prepareLobbyForLaunch(ctx, lobby);
+        const membershipChanged = prepareLobbyForLaunch(ctx, lobby);
         markTeamsIncomplete(lobby);
         lobby.state = LOBBY_SERVER_SETUP;
         lobby.connect = "";
@@ -625,7 +648,7 @@ export class Lobby {
         // owner's local/listen server, non-zero is a supervised dedicated server.
         lobby.lan = lobby.serverRegion === 0;
         refreshLobby(lobby, ctx.clock.now());
-        broadcastLobby(ctx, lobby, 0n, false);
+        broadcastLobby(ctx, lobby, 0n, false, membershipChanged);
         publishLobby(ctx.services.lobby, lobby);
 
         let launchResult = SUCCESS;
@@ -1085,8 +1108,8 @@ function joinLobbyState(ctx: RawMessageContext, lobby: LobbyState, passKey: stri
     }
 
     refreshLobby(lobby, ctx.clock.now());
-    subscribeToLobbyObjectOnly(ctx, ctx.steamId, lobby);
-    broadcastLobby(ctx, lobby, ctx.steamId, false);
+    subscribeToJoinedLobby(ctx, ctx.steamId, lobby);
+    broadcastLobby(ctx, lobby, ctx.steamId, false, true);
     publishLobby(ctx.services.lobby, lobby);
     return true;
 }
@@ -1140,7 +1163,9 @@ function ensureMember(
         slot: steamId === lobby.leaderSteamId ? 1 : 0,
         coachTeam: TEAM_NONE,
         heroId: 0,
-        leaverStatus: LEAVER_DISCONNECTED,
+        // A newly created/joined lobby member is present in the GC lobby. Actual
+        // game-server disconnects are tracked later by ConnectedPlayers/7049.
+        leaverStatus: LEAVER_NONE,
         connectedOnce: false,
         lastSeen: now
     };
@@ -1183,7 +1208,7 @@ function kickMemberByAccountId(ctx: RawMessageContext, accountId: number): void 
 
     removeLobbyMember(ctx, lobby, member, true);
     refreshLobby(lobby, ctx.clock.now());
-    broadcastLobby(ctx, lobby, member.steamId, false);
+    broadcastLobby(ctx, lobby, member.steamId, false, true);
     publishLobby(ctx.services.lobby, lobby);
 }
 
@@ -1278,7 +1303,7 @@ function leaveCurrent(ctx: GcContextBase, keepLobbyId: bigint): void {
         removeLobbyMember(ctx, lobby, member, false);
     }
     refreshLobby(lobby, ctx.clock.now());
-    broadcastLobby(ctx, lobby, ctx.steamId, false);
+    broadcastLobby(ctx, lobby, ctx.steamId, false, true);
     publishLobby(ctx.services.lobby, lobby);
 }
 
@@ -1316,9 +1341,26 @@ function destroyLobby(lobby: LobbyState, ctx: GcContextBase | undefined, reason:
         }
     }
 
+    destroyLobbyInvites(lobby.lobbyId, ctx);
+
     store.lobbies.delete(lobby.lobbyId);
     if (ctx !== undefined) {
         ctx.services.lobby.removeSnapshot(lobby.lobbyId);
+    }
+}
+
+function destroyLobbyInvites(lobbyId: bigint, ctx: GcContextBase | undefined): void {
+    const invites = Array.from(store.invites.values());
+    for (let i = 0; i < invites.length; i++) {
+        const invite = invites[i];
+        if (invite.lobbyId !== lobbyId) {
+            continue;
+        }
+
+        store.invites.delete(invite.inviteId);
+        if (ctx !== undefined) {
+            sendTo(ctx, invite.targetSteamId, Msg.SOCacheUnsubscribed, buildInviteUnsubscribed(lobbyId));
+        }
     }
 }
 
@@ -1484,7 +1526,7 @@ function applyConnectedPlayers(lobby: LobbyState, request: CMsgConnectedPlayers,
     }
 }
 
-function prepareLobbyForLaunch(ctx: GcContextBase, lobby: LobbyState): void {
+function prepareLobbyForLaunch(ctx: GcContextBase, lobby: LobbyState): boolean {
     if (lobby.allowSpectating) {
         let spectators = 0;
         for (let i = 0; i < lobby.members.length; i++) {
@@ -1497,7 +1539,7 @@ function prepareLobbyForLaunch(ctx: GcContextBase, lobby: LobbyState): void {
         }
 
         lobby.numSpectators = spectators;
-        return;
+        return false;
     }
 
     const removed: bigint[] = [];
@@ -1516,6 +1558,7 @@ function prepareLobbyForLaunch(ctx: GcContextBase, lobby: LobbyState): void {
     }
 
     lobby.numSpectators = 0;
+    return removed.length > 0;
 }
 
 function ensureMatchId(lobby: LobbyState): bigint {
@@ -1556,19 +1599,6 @@ function buildLobbySoCacheSubscribed(ctx: GcContextBase, lobby: LobbyState): CMs
     };
 }
 
-function buildLobbyObjectOnlySubscribed(ctx: GcContextBase, lobby: LobbyState): CMsgSOCacheSubscribed {
-    // Joining an existing practice lobby follows the legacy GC wire flow:
-    // the joining client receives a cache subscription containing only the
-    // mutable lobby object (2004), then a single-object create for the same
-    // object. Static lobby/server buckets are sent when the lobby is created,
-    // but not during join; sending them here makes this client build unstable.
-    return {
-        objects: [subscribedType(LOBBY_OBJECT_TYPE_ID, [ctx.encode(Proto.CSODOTALobby, buildLobbyObject(lobby))])],
-        version: lobby.version,
-        ownerSoid: { type: LOBBY_OWNER_TYPE, id: lobby.lobbyId }
-    };
-}
-
 function buildLobbySoCacheUnsubscribed(lobby: LobbyState): CMsgSOCacheUnsubscribed {
     return buildLobbySoCacheUnsubscribedForId(lobby.lobbyId);
 }
@@ -1579,16 +1609,43 @@ function buildLobbySoCacheUnsubscribedForId(lobbyId: bigint): CMsgSOCacheUnsubsc
     };
 }
 
-function buildLobbyMultipleObjects(ctx: GcContextBase, lobby: LobbyState): CMsgSOMultipleObjects {
-    // Existing lobby members are notified like the legacy GC: UpdateMultiple
-    // carries only CSODOTALobby (2004). Member names and server-static data are
-    // part of the create-time SO cache, not the join-time update.
+function buildLobbySingleObject(ctx: GcContextBase, lobby: LobbyState): CMsgSOSingleObject {
+    return {
+        typeId: LOBBY_OBJECT_TYPE_ID,
+        objectData: ctx.encode(Proto.CSODOTALobby, buildLobbyObject(lobby)),
+        version: lobby.version + 1n,
+        ownerSoid: { type: LOBBY_OWNER_TYPE, id: lobby.lobbyId }
+    };
+}
+
+function buildLobbyMultipleObjects(
+    ctx: GcContextBase,
+    lobby: LobbyState,
+    membershipChanged: boolean
+): CMsgSOMultipleObjects {
     const objectsModified: CMsgSOMultipleObjects_SingleObject[] = [
         {
             typeId: LOBBY_OBJECT_TYPE_ID,
             objectData: ctx.encode(Proto.CSODOTALobby, buildLobbyObject(lobby))
         }
     ];
+
+    if (membershipChanged) {
+        objectsModified.push(
+            {
+                typeId: LOBBY_STATIC_OBJECT_TYPE_ID,
+                objectData: ctx.encode(Proto.CSODOTAStaticLobby, buildStaticLobbyObject(lobby))
+            },
+            {
+                typeId: LOBBY_SERVER_OBJECT_TYPE_ID,
+                objectData: ctx.encode(Proto.CSODOTAServerLobby, buildServerLobbyObject(lobby))
+            },
+            {
+                typeId: LOBBY_SERVER_STATIC_OBJECT_TYPE_ID,
+                objectData: ctx.encode(Proto.CSODOTAServerStaticLobby, buildServerStaticLobbyObject(lobby))
+            }
+        );
+    }
 
     return {
         objectsModified,
@@ -1720,8 +1777,14 @@ function memberIndices(count: number): number[] {
     return indices;
 }
 
-function broadcastLobby(ctx: GcContextBase, lobby: LobbyState, exceptSteamId: bigint, includeServer: boolean): void {
-    const payload = buildLobbyMultipleObjects(ctx, lobby);
+function broadcastLobby(
+    ctx: GcContextBase,
+    lobby: LobbyState,
+    exceptSteamId: bigint,
+    includeServer: boolean,
+    membershipChanged = false
+): void {
+    const payload = buildLobbyMultipleObjects(ctx, lobby, membershipChanged);
     if (includeServer && lobby.serverSteamId !== 0n && lobby.serverSteamId !== exceptSteamId) {
         sendTo(ctx, lobby.serverSteamId, Msg.SOCacheUpdated, payload);
     }
@@ -1743,8 +1806,9 @@ function subscribeToLobby(ctx: GcContextBase, steamId: bigint, lobby: LobbyState
     sendTo(ctx, steamId, Msg.SOCacheSubscribed, buildLobbySoCacheSubscribed(ctx, lobby));
 }
 
-function subscribeToLobbyObjectOnly(ctx: GcContextBase, steamId: bigint, lobby: LobbyState): void {
-    sendTo(ctx, steamId, Msg.SOCacheSubscribed, buildLobbyObjectOnlySubscribed(ctx, lobby));
+function subscribeToJoinedLobby(ctx: GcContextBase, steamId: bigint, lobby: LobbyState): void {
+    sendTo(ctx, steamId, Msg.SOCacheSubscribed, buildLobbySoCacheSubscribed(ctx, lobby));
+    sendTo(ctx, steamId, Msg.SOSingleObject, buildLobbySingleObject(ctx, lobby));
 }
 
 type LobbyOutboundMessage =
@@ -1930,6 +1994,17 @@ function buildInviteUnsubscribed(lobbyId: bigint): CMsgSOCacheUnsubscribed {
 
 function buildInviteObject(invite: LobbyInviteState): CSODOTALobbyInvite {
     const lobby = store.lobbies.get(invite.lobbyId) ?? null;
+    const members: CSODOTALobbyInvite_LobbyMember[] = [];
+    if (lobby !== null) {
+        for (let i = 0; i < lobby.members.length; i++) {
+            const member = lobby.members[i];
+            members.push({
+                name: member.personaName,
+                steamId: member.steamId
+            });
+        }
+    }
+
     return {
         groupId: invite.lobbyId,
         senderId: invite.senderSteamId,
@@ -1938,20 +2013,26 @@ function buildInviteObject(invite: LobbyInviteState): CSODOTALobbyInvite {
         customGameId: lobby?.customGameId ?? 0n,
         customGameCrc: lobby?.customGameCrc ?? 0n,
         customGameTimestamp: lobby?.customGameTimestamp ?? 0,
-        members:
-            lobby?.members.map((member) => ({
-                name: member.personaName,
-                steamId: member.steamId
-            })) ?? []
+        members
     };
 }
 
 function emitCurrentLobbyInvites(ctx: GcContextBase): void {
-    store.invites.forEach((invite) => {
-        if (invite.targetSteamId === ctx.steamId) {
-            sendInvite(ctx, invite);
+    const invites = Array.from(store.invites.values());
+    for (let i = 0; i < invites.length; i++) {
+        const invite = invites[i];
+        if (invite.targetSteamId !== ctx.steamId) {
+            continue;
         }
-    });
+
+        if (!store.lobbies.has(invite.lobbyId)) {
+            store.invites.delete(invite.inviteId);
+            ctx.send(Msg.SOCacheUnsubscribed, Proto.CMsgSOCacheUnsubscribed, buildInviteUnsubscribed(invite.lobbyId));
+            continue;
+        }
+
+        sendInvite(ctx, invite);
+    }
 }
 
 function takeInvite(lobbyId: bigint, targetSteamId: bigint): LobbyInviteState | null {

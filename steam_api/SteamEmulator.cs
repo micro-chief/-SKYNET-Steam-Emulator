@@ -64,6 +64,7 @@ public class SteamEmulator
     public static bool ConsoleLog;
     public static bool LogToFile;
     public static bool LogToConsole;
+    public static bool TraceInterfaces;
 
     public static bool Initialized;
     public static bool Initializing;
@@ -156,6 +157,7 @@ public class SteamEmulator
         UnlockAllDLC = true;
         LogToFile = true;
         LogToConsole = true;
+        TraceInterfaces = false;
         ISteamHTTP = true;
         UseServerApi = true;
         SecureNetworking = false;
@@ -211,7 +213,7 @@ public class SteamEmulator
             catch { /* best effort */ }
 
             Write("Initializing Steam emulator");
-            Write($"Process PID={Process.GetCurrentProcess().Id} Role={Environment.GetEnvironmentVariable("SKYNET_PROCESS_ROLE") ?? "client"} CommandLine={Environment.CommandLine}");
+            Write($"Process PID={Process.GetCurrentProcess().Id} Role={Environment.GetEnvironmentVariable("SKYNET_PROCESS_ROLE") ?? "client"} CurrentDirectory={Environment.CurrentDirectory} CommandLine={Environment.CommandLine}");
             Write($"Networking security mode: {(SecureNetworking ? "secure SDR certificate" : "insecure LAN (no SDR certificate)")}");
 
             if (SecureNetworking)
@@ -528,8 +530,7 @@ public class SteamEmulator
         if (sender == "SteamAPI")
         {
             if ((text.Contains("  3406 ") && text.Contains("DownloadItemResult")) ||
-                text == "SteamAPI_UnregisterCallback DownloadItemResult OK" ||
-                text == "SteamAPI_UnregisterCallback PersonaStateChange OK")
+                text == "SteamAPI_UnregisterCallback DownloadItemResult OK")
             {
                 return true;
             }

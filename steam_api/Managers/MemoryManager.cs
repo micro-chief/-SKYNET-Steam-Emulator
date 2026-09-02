@@ -39,14 +39,21 @@ namespace SKYNET.Managers
             {
                 var Methods = InterfaceMethodsForType(type);
 
-                foreach (var methodInfo in Methods)
+                for (var slot = 0; slot < Methods.Count; slot++)
                 {
+                    var methodInfo = Methods[slot];
                     Type DelegateType = CreateDelegate(methodInfo);
 
                     Delegate new_delegate = null;
                     try
                     {
                         new_delegate = Delegate.CreateDelegate(DelegateType, Instance, methodInfo, true);
+                        new_delegate = InterfaceCallTracer.Wrap(
+                            DelegateType,
+                            new_delegate,
+                            type,
+                            methodInfo,
+                            slot);
                         new_delegates.Add(new_delegate);
                     }
                     catch (Exception e)

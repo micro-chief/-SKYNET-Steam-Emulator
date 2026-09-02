@@ -28,6 +28,13 @@ namespace SKYNET.Steamworks.Exported
         [DllImport("kernel32.dll", SetLastError = true)]
         private static extern bool VirtualProtect(IntPtr lpAddress, UIntPtr dwSize, uint flNewProtect, out uint lpflOldProtect);
 
+        [DllImport("kernel32.dll", EntryPoint = "RtlCaptureStackBackTrace")]
+        private static extern ushort CaptureStackBackTrace(
+            uint framesToSkip,
+            uint framesToCapture,
+            [Out] IntPtr[] backTrace,
+            out uint backTraceHash);
+
         static SteamAPI()
         {
             if (!SteamEmulator.Initialized && !SteamEmulator.Initializing)
@@ -60,8 +67,44 @@ namespace SKYNET.Steamworks.Exported
         public static void SteamAPI_Shutdown(IntPtr pContextInitData)
         {
             Write("SteamAPI_Shutdown");
+            WriteNativeShutdownTrace();
             APIClient.GoOffline();
             SteamEmulator.ShutdownServices();
+        }
+
+        private static void WriteNativeShutdownTrace()
+        {
+            try
+            {
+                var frames = new IntPtr[24];
+                uint hash;
+                ushort count = CaptureStackBackTrace(0, (uint)frames.Length, frames, out hash);
+                using (Process process = Process.GetCurrentProcess())
+                {
+                    for (int frameIndex = 0; frameIndex < count; frameIndex++)
+                    {
+                        long address = frames[frameIndex].ToInt64();
+                        string location = "unknown";
+
+                        foreach (ProcessModule module in process.Modules)
+                        {
+                            long moduleStart = module.BaseAddress.ToInt64();
+                            long moduleEnd = moduleStart + module.ModuleMemorySize;
+                            if (address >= moduleStart && address < moduleEnd)
+                            {
+                                location = $"{module.ModuleName}+0x{address - moduleStart:X}";
+                                break;
+                            }
+                        }
+
+                        Write($"SteamAPI_Shutdown trace[{frameIndex}] 0x{address:X} {location}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Write($"SteamAPI_Shutdown trace unavailable: {ex.GetType().Name}: {ex.Message}");
+            }
         }
 
         [DllExport(CallingConvention = CallingConvention.Cdecl)]
@@ -165,6 +208,11 @@ namespace SKYNET.Steamworks.Exported
 
             if (APIClient.EnsureInitialSession())
             {
+                // The initial session is normally established synchronously from
+                // SteamAPI_Init. Mirror the background handshake path so clients
+                // always observe SteamServersConnected_t after registering their
+                // callbacks. SteamUser suppresses duplicate notifications.
+                SteamEmulator.SteamUser?.OnServerSessionConnected();
                 PrepareLegacyGameServerExport();
                 NativeStringCache.WriteUtf8Buffer(
                     pOutErrMsg,

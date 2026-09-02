@@ -18,6 +18,7 @@ public sealed class ApiSessionResult
 {
     public string AccessToken { get; set; } = string.Empty;
     public string RefreshToken { get; set; } = string.Empty;
+    public string EventCursor { get; set; } = string.Empty;
     public ApiUser User { get; set; } = new();
     public bool IsAdmin { get; set; }
     public List<ApiWorkshopSubscription> WorkshopSubscriptions { get; set; } = new();
@@ -912,6 +913,7 @@ public sealed class ApiSession
     public string RefreshToken { get; set; } = string.Empty;
     public ulong SteamId { get; set; }
     public uint AppId { get; set; }
+    public long EventCursor { get; set; }
     public string ClientInstanceId { get; set; } = string.Empty;
     public string ProcessRole { get; set; } = "client";
     public string? RemoteIp { get; set; }

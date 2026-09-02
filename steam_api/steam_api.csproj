@@ -209,6 +209,7 @@
     <Compile Include="Steamworks\Helpers\MsvcVTableOverloadAttribute.cs" />
     <Compile Include="Managers\CallbackManager.cs" />
     <Compile Include="Managers\InterfaceManager.cs" />
+    <Compile Include="Managers\InterfaceCallTracer.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="SteamEmulator.cs" />
     <Compile Include="Steamworks\Interfaces\ISteamInterface.cs" />

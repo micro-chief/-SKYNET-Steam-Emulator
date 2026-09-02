@@ -344,15 +344,21 @@ namespace SKYNET.Steamworks.Exported
         [DllExport(CallingConvention = CallingConvention.Cdecl)]
         public static HSteamUser SteamGameServer_GetHSteamUser()
         {
-            Write("SteamGameServer_GetHSteamUser");
-            return SteamEmulator.HSteamUser_GS;
+            var handle = SteamEmulator.SteamGameServer != null && SteamEmulator.SteamGameServer.ApiInitialized
+                ? SteamEmulator.HSteamUser_GS
+                : 0;
+            Write($"SteamGameServer_GetHSteamUser = {handle}");
+            return handle;
         }
 
         [DllExport(CallingConvention = CallingConvention.Cdecl)]
         public static HSteamPipe SteamGameServer_GetHSteamPipe()
         {
-            Write("SteamGameServer_GetHSteamPipe");
-            return SteamEmulator.HSteamPipe_GS;
+            var handle = SteamEmulator.SteamGameServer != null && SteamEmulator.SteamGameServer.ApiInitialized
+                ? SteamEmulator.HSteamPipe_GS
+                : 0;
+            Write($"SteamGameServer_GetHSteamPipe = {handle}");
+            return handle;
         }
 
         [DllExport(CallingConvention = CallingConvention.Cdecl)]

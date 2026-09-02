@@ -1854,11 +1854,27 @@ namespace SKYNET.Managers
             }
 
             EnsureSession();
-            var cursor = Uri.EscapeDataString(StateCache.GetEventCursor());
+            var currentCursor = StateCache.GetEventCursor();
+            var initializingCursor = string.IsNullOrWhiteSpace(currentCursor);
+            var cursor = Uri.EscapeDataString(currentCursor);
             var envelope = Send<ApiEventEnvelope>(HttpMethod.Get, $"api/events?since={cursor}&waitMs={Math.Max(0, waitMs)}");
             if (envelope != null && !string.IsNullOrWhiteSpace(envelope.Cursor))
             {
                 StateCache.SetEventCursor(envelope.Cursor);
+            }
+
+            // Older servers interpret an empty cursor as sequence zero and replay
+            // their entire in-memory history into every freshly launched game.
+            // Session metadata already supplies the initial social/lobby snapshot;
+            // the event stream is for changes that happen after the process joins.
+            // Keep this client-side guard so copied clients remain safe when they
+            // connect to a server that has not yet adopted per-session baselines.
+            if (initializingCursor && envelope?.Events != null && envelope.Events.Count > 0)
+            {
+                SteamEmulator.Write(
+                    "APIClient",
+                    $"Discarded {envelope.Events.Count} pre-session event(s) while initializing cursor {envelope.Cursor}.");
+                envelope.Events.Clear();
             }
 
             return envelope;
@@ -2077,6 +2093,10 @@ namespace SKYNET.Managers
         {
             SteamEmulator.AccessToken = session.AccessToken ?? string.Empty;
             SteamEmulator.RefreshToken = session.RefreshToken ?? string.Empty;
+            if (!string.IsNullOrWhiteSpace(session.EventCursor))
+            {
+                StateCache.SetEventCursor(session.EventCursor);
+            }
 
             if (session.User != null)
             {
@@ -2490,6 +2510,7 @@ namespace SKYNET.Managers
         {
             public string AccessToken { get; set; }
             public string RefreshToken { get; set; }
+            public string EventCursor { get; set; }
             public ApiUser User { get; set; }
             public List<SkyNetWorkshopSubscriptionDto> WorkshopSubscriptions { get; set; }
             public List<SkyNetAchievementDefinitionDto> AchievementDefinitions { get; set; }

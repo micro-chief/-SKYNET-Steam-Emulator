@@ -92,7 +92,7 @@ namespace SKYNET.Callback
 
         public static void RegisterCallback(IntPtr self, int callbackId)
         {
-            if (!IsSupportedCallbackPointer(self) || IntPtr.Size == 4)
+            if (!IsSupportedCallbackPointer(self))
             {
                 return;
             }
@@ -104,7 +104,7 @@ namespace SKYNET.Callback
 
         public static void UnregisterCallback(IntPtr self)
         {
-            if (!IsSupportedCallbackPointer(self) || IntPtr.Size == 4)
+            if (!IsSupportedCallbackPointer(self))
             {
                 return;
             }

@@ -174,6 +174,9 @@ namespace SKYNET.Managers
             NativeCallbackQueue.Drain(gameServer);
             var frameUtc = DateTime.UtcNow;
             var invocations = DrainForFrame(gameServer, SteamEmulator.HSteamPipe, SteamEmulator.HSteamUser, frameUtc);
+            InterfaceCallTracer.Diagnostic(
+                "CallbackTrace",
+                $"FRAME gs={gameServer} ready={invocations.Count}");
             InvokeCallbacks(invocations);
             ClearPendingDirectCallbacks(gameServer, frameUtc);
         }
@@ -189,6 +192,9 @@ namespace SKYNET.Managers
             NativeCallbackQueue.Drain(gameServer);
             var frameUtc = DateTime.UtcNow;
             var invocations = DrainForFrame(gameServer, hSteamPipe, gameServer ? SteamEmulator.HSteamUser_GS : SteamEmulator.HSteamUser, frameUtc);
+            InterfaceCallTracer.Diagnostic(
+                "CallbackTrace",
+                $"MANUAL FRAME pipe={hSteamPipe} gs={gameServer} ready={invocations.Count}");
             InvokeCallbacks(invocations);
             ClearPendingDirectCallbacks(gameServer, frameUtc);
         }
@@ -208,6 +214,9 @@ namespace SKYNET.Managers
                 }
 
                 var next = queue.Dequeue();
+                InterfaceCallTracer.Diagnostic(
+                    "CallbackTrace",
+                    $"MANUAL DEQUEUE pipe={hSteamPipe} callback={next.CallbackId} bytes={next.Payload.Length}");
                 IntPtr payload = IntPtr.Zero;
                 if (next.Payload.Length > 0)
                 {
@@ -594,8 +603,14 @@ namespace SKYNET.Managers
 
         private static void InvokeCallbacks(List<CallbackInvocation> invocations)
         {
+            var quarantinedPointers = new HashSet<IntPtr>();
             foreach (var invocation in invocations)
             {
+                if (quarantinedPointers.Contains(invocation.Callback.Pointer))
+                {
+                    continue;
+                }
+
                 IntPtr buffer = IntPtr.Zero;
                 try
                 {
@@ -605,9 +620,17 @@ namespace SKYNET.Managers
                         Marshal.Copy(invocation.Payload, 0, buffer, invocation.Payload.Length);
                     }
 
+                    InterfaceCallTracer.Diagnostic(
+                        "CallbackTrace",
+                        $"CALL callback={(int)invocation.Callback.CallbackType} " +
+                        $"ptr=0x{invocation.Callback.Pointer.ToInt64():X} bytes={invocation.Payload.Length} " +
+                        $"callResult={invocation.IsCallResult} handle={invocation.Handle}");
                     bool invoked = invocation.IsCallResult
                         ? invocation.Callback.Run(buffer, invocation.IOFailure, invocation.Handle)
                         : invocation.Callback.Run(buffer);
+                    InterfaceCallTracer.Diagnostic(
+                        "CallbackTrace",
+                        $"RETURN callback={(int)invocation.Callback.CallbackType} invoked={invoked}");
 
                     if (!invoked)
                     {
@@ -617,6 +640,13 @@ namespace SKYNET.Managers
                 catch (Exception ex)
                 {
                     Write($"Callback invocation failed callback={(int)invocation.Callback.CallbackType} ptr=0x{invocation.Callback.Pointer.ToInt64():X}: {ex}");
+                    if (ex is AccessViolationException || ex is SEHException)
+                    {
+                        quarantinedPointers.Add(invocation.Callback.Pointer);
+                        QuarantineInvalidCallback(
+                            invocation.Callback.Pointer,
+                            (int)invocation.Callback.CallbackType);
+                    }
                 }
                 finally
                 {
@@ -626,6 +656,32 @@ namespace SKYNET.Managers
                     }
                 }
             }
+        }
+
+        private static void QuarantineInvalidCallback(IntPtr pointer, int callbackId)
+        {
+            if (pointer == IntPtr.Zero)
+            {
+                return;
+            }
+
+            int removed = 0;
+            lock (Gate)
+            {
+                removed += CompletedCallbacks.RemoveAll(c => c.Pointer == pointer);
+
+                foreach (var callbacks in RegisteredCallbacks.Values)
+                {
+                    removed += callbacks.RemoveAll(c => c.Pointer == pointer);
+                }
+
+                foreach (var record in Records)
+                {
+                    removed += record.Callbacks.RemoveAll(c => c.Pointer == pointer);
+                }
+            }
+
+            Write($"Quarantined invalid callback callback={callbackId} ptr=0x{pointer.ToInt64():X} removed={removed}");
         }
 
         private static void QueueManualDispatch(HSteamPipe pipe, HSteamUser steamUser, int callbackId, byte[] payload)

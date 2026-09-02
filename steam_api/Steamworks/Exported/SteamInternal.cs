@@ -62,6 +62,12 @@ namespace SKYNET.Steamworks.Exported
         [DllExport(CallingConvention = CallingConvention.Cdecl)]
         public static IntPtr SteamInternal_FindOrCreateGameServerInterface(HSteamUser hSteamUser, [MarshalAs(UnmanagedType.LPStr)] string pszVersion)
         {
+            if (hSteamUser == 0 || SteamEmulator.SteamGameServer == null || !SteamEmulator.SteamGameServer.ApiInitialized)
+            {
+                Write($"SteamInternal_FindOrCreateGameServerInterface {pszVersion} = NULL (game server API is not initialized)");
+                return IntPtr.Zero;
+            }
+
             Write($"SteamInternal_FindOrCreateGameServerInterface {pszVersion}");
             return InterfaceManager.FindOrCreateInterface(hSteamUser, 1, pszVersion, true);
         }

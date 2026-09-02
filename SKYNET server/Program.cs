@@ -116,9 +116,11 @@ builder.Services.AddSingleton<SdrCertificateService>();
 builder.Services.AddSingleton<SKYNET_server.Services.Networking.SdrRelayConfigService>();
 
 // Read-only diagnostic MCP server (discussion #36): thin wrappers over the
-// state services above, gated by the same admin token as /api/admin/*.
+// state services above, gated by the same admin bearer token as /api/admin/*.
 builder.Services.AddSingleton<InMemoryLogBufferProvider>();
 builder.Logging.Services.AddSingleton<Microsoft.Extensions.Logging.ILoggerProvider>(sp => sp.GetRequiredService<InMemoryLogBufferProvider>());
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddSingleton<McpAdminAuthorization>();
 builder.Services.AddMcpServer()
     .WithHttpTransport()
     .WithTools<SkynetDiagnosticsMcpTools>();
@@ -138,7 +140,23 @@ builder.Services.AddHostedService<SKYNET_server.Services.Networking.SdrRelayServ
 var app = builder.Build();
 app.Logger.LogInformation("CS2 item catalog: {CatalogStatus}", Cs2GcRuntimeServices.ItemCatalogStatus);
 
+// Authenticate the MCP transport itself so unauthenticated clients cannot even
+// enumerate diagnostics. Codex supplies this header from bearer_token_env_var;
+// the secret never appears in a tool argument or its JSON schema.
+app.UseWhen(
+    context => context.Request.Path.StartsWithSegments("/mcp"),
+    mcp => mcp.Use(async (context, next) =>
+    {
+        var authorization = context.RequestServices.GetRequiredService<McpAdminAuthorization>();
+        if (!authorization.IsAuthorized)
+        {
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            context.Response.Headers.WWWAuthenticate = "Bearer realm=\"SKYNET diagnostics\"";
+            return;
+        }
 
+        await next();
+    }));
 app.MapMcp("/mcp");
 
 // Prepare split SQLite stores before any facade touches them. app.db and older

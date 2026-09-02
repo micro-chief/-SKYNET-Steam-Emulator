@@ -22,8 +22,8 @@ internal static class PeImports
     {
         try
         {
-            return ReadImports(path).Any(import =>
-                string.Equals(import.ModuleName, moduleName, StringComparison.OrdinalIgnoreCase));
+            using var image = new PeImage(path);
+            return image.FindImportNameFieldRvas(moduleName).Count != 0;
         }
         catch
         {
@@ -43,6 +43,18 @@ internal static class PeImports
         return image.FindImportNameFieldRvas(moduleName);
     }
 
+    public static IReadOnlyList<uint> FindDelayImportNameRvas(string path, string moduleName)
+    {
+        using var image = new PeImage(path);
+        return image.FindDelayImportNameRvas(moduleName);
+    }
+
+    public static IReadOnlyList<uint> FindAsciiStringRvas(string path, string value)
+    {
+        using var image = new PeImage(path);
+        return image.FindAsciiStringRvas(value);
+    }
+
     private sealed class PeImage : IDisposable
     {
         private const ushort DosSignature = 0x5A4D;
@@ -53,6 +65,9 @@ internal static class PeImports
         private readonly BinaryReader _reader;
         private readonly List<Section> _sections = new();
         private readonly uint _importRva;
+        private readonly uint _delayImportRva;
+        private readonly uint _delayImportSize;
+        private readonly ulong _imageBase;
 
         public PeImage(string path)
         {
@@ -78,7 +93,13 @@ internal static class PeImports
             };
 
             var dataDirectories = optionalHeader + (PointerSize == 8 ? 112u : 96u);
-            _importRva = ReadUInt32(dataDirectories + 8);
+            var directoryCount = ReadUInt32(optionalHeader + (PointerSize == 8 ? 108u : 92u));
+            _imageBase = PointerSize == 8
+                ? ReadUInt64(optionalHeader + 24)
+                : ReadUInt32(optionalHeader + 28);
+            _importRva = directoryCount > 1 ? ReadUInt32(dataDirectories + 8) : 0;
+            _delayImportRva = directoryCount > 13 ? ReadUInt32(dataDirectories + (13 * 8)) : 0;
+            _delayImportSize = directoryCount > 13 ? ReadUInt32(dataDirectories + (13 * 8) + 4) : 0;
 
             var sectionOffset = optionalHeader + optionalHeaderSize;
             for (var index = 0; index < sectionCount; index++)
@@ -156,24 +177,120 @@ internal static class PeImports
         public IReadOnlyList<uint> FindImportNameFieldRvas(string moduleName)
         {
             var result = new List<uint>();
-            if (_importRva == 0)
-                return result;
-
-            var descriptorOffset = RvaToOffset(_importRva);
-            for (var descriptorIndex = 0; ; descriptorIndex++)
+            if (_importRva != 0)
             {
-                var descriptorRva = _importRva + (uint)(descriptorIndex * 20);
-                var offset = descriptorOffset + (uint)(descriptorIndex * 20);
-                var originalFirstThunk = ReadUInt32(offset);
-                var nameRva = ReadUInt32(offset + 12);
-                var firstThunk = ReadUInt32(offset + 16);
-                if (originalFirstThunk == 0 && nameRva == 0 && firstThunk == 0)
+                var descriptorOffset = RvaToOffset(_importRva);
+                for (var descriptorIndex = 0; ; descriptorIndex++)
+                {
+                    var descriptorRva = _importRva + (uint)(descriptorIndex * 20);
+                    var offset = descriptorOffset + (uint)(descriptorIndex * 20);
+                    var originalFirstThunk = ReadUInt32(offset);
+                    var nameRva = ReadUInt32(offset + 12);
+                    var firstThunk = ReadUInt32(offset + 16);
+                    if (originalFirstThunk == 0 && nameRva == 0 && firstThunk == 0)
+                        break;
+                    if (nameRva != 0 && string.Equals(ReadAnsiZ(RvaToOffset(nameRva)), moduleName, StringComparison.OrdinalIgnoreCase))
+                        result.Add(descriptorRva + 12);
+                }
+            }
+
+            FindDelayImports(moduleName, result, null);
+
+            return result;
+        }
+
+        public IReadOnlyList<uint> FindDelayImportNameRvas(string moduleName)
+        {
+            var result = new List<uint>();
+            FindDelayImports(moduleName, null, result);
+            return result;
+        }
+
+        public IReadOnlyList<uint> FindAsciiStringRvas(string value)
+        {
+            if (string.IsNullOrEmpty(value))
+                return Array.Empty<uint>();
+
+            var pattern = Encoding.ASCII.GetBytes(value + "\0");
+            var result = new List<uint>();
+            var buffer = new byte[(1024 * 1024) + pattern.Length - 1];
+            _stream.Position = 0;
+            long bytesReadFromFile = 0;
+            var carried = 0;
+
+            while (true)
+            {
+                var read = _stream.Read(buffer, carried, buffer.Length - carried);
+                if (read == 0)
                     break;
-                if (nameRva != 0 && string.Equals(ReadAnsiZ(RvaToOffset(nameRva)), moduleName, StringComparison.OrdinalIgnoreCase))
-                    result.Add(descriptorRva + 12);
+
+                var available = carried + read;
+                var bufferFileOffset = bytesReadFromFile - carried;
+                for (var index = 0; index <= available - pattern.Length; index++)
+                {
+                    var matches = true;
+                    for (var patternIndex = 0; patternIndex < pattern.Length; patternIndex++)
+                    {
+                        if (buffer[index + patternIndex] == pattern[patternIndex])
+                            continue;
+                        matches = false;
+                        break;
+                    }
+
+                    if (!matches)
+                        continue;
+
+                    var fileOffset = checked((uint)(bufferFileOffset + index));
+                    if (TryOffsetToRva(fileOffset, out var rva))
+                        result.Add(rva);
+                }
+
+                bytesReadFromFile += read;
+                carried = Math.Min(pattern.Length - 1, available);
+                Buffer.BlockCopy(buffer, available - carried, buffer, 0, carried);
             }
 
             return result;
+        }
+
+        private void FindDelayImports(
+            string moduleName,
+            ICollection<uint>? nameFieldRvas,
+            ICollection<uint>? nameRvas)
+        {
+            if (_delayImportRva == 0)
+                return;
+
+            const uint descriptorSize = 32;
+            var descriptorOffset = RvaToOffset(_delayImportRva);
+            var descriptorLimit = _delayImportSize == 0
+                ? 1024u
+                : Math.Min(1024u, _delayImportSize / descriptorSize);
+
+            for (uint descriptorIndex = 0; descriptorIndex < descriptorLimit; descriptorIndex++)
+            {
+                var descriptorRva = _delayImportRva + descriptorIndex * descriptorSize;
+                var offset = descriptorOffset + descriptorIndex * descriptorSize;
+                var attributes = ReadUInt32(offset);
+                var nameAddress = ReadUInt32(offset + 4);
+                var moduleHandle = ReadUInt32(offset + 8);
+                var importAddressTable = ReadUInt32(offset + 12);
+                var importNameTable = ReadUInt32(offset + 16);
+                if (attributes == 0 && nameAddress == 0 && moduleHandle == 0 &&
+                    importAddressTable == 0 && importNameTable == 0)
+                    break;
+                if (nameAddress == 0)
+                    continue;
+
+                var nameRva = (attributes & 1) != 0
+                    ? nameAddress
+                    : checked((uint)((ulong)nameAddress - _imageBase));
+                if (string.Equals(ReadAnsiZ(RvaToOffset(nameRva)), moduleName, StringComparison.OrdinalIgnoreCase))
+                {
+                    nameFieldRvas?.Add(descriptorRva + 4);
+                    nameRvas?.Add(nameRva);
+                }
+            }
         }
 
         private uint RvaToOffset(uint rva)
@@ -186,6 +303,20 @@ internal static class PeImports
             }
 
             throw new InvalidDataException($"RVA 0x{rva:X8} is outside the PE sections.");
+        }
+
+        private bool TryOffsetToRva(uint offset, out uint rva)
+        {
+            foreach (var section in _sections)
+            {
+                if (offset < section.RawOffset || offset >= section.RawOffset + section.RawSize)
+                    continue;
+                rva = section.VirtualAddress + offset - section.RawOffset;
+                return true;
+            }
+
+            rva = 0;
+            return false;
         }
 
         private ushort ReadUInt16(uint offset)

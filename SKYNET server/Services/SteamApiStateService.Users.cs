@@ -35,6 +35,11 @@ public sealed partial class SteamApiStateService
             {
                 SteamId = steamId,
                 AppId = user.AppId,
+                // A new process consumes only events created after its own
+                // session started. Replaying the server's retained history here
+                // can dispatch thousands of stale persona/lobby callbacks during
+                // the first Unreal frame.
+                EventCursor = _nextEventSequence - 1,
                 AccessToken = Guid.NewGuid().ToString("N"),
                 RefreshToken = Guid.NewGuid().ToString("N"),
                 ClientInstanceId = clientInstanceId,
@@ -56,6 +61,7 @@ public sealed partial class SteamApiStateService
             {
                 AccessToken = session.AccessToken,
                 RefreshToken = session.RefreshToken,
+                EventCursor = session.EventCursor.ToString(System.Globalization.CultureInfo.InvariantCulture),
                 User = CloneUser(user),
                 IsAdmin = isAdmin,
                 WorkshopSubscriptions = GetWorkshopSubscriptionsLocked(steamId, user.AppId),
@@ -439,15 +445,18 @@ public sealed partial class SteamApiStateService
                 return new ApiEventEnvelope();
             }
 
-            var lastSeen = 0L;
-            long.TryParse(since, out lastSeen);
+            var lastSeen = session!.EventCursor;
+            if (!string.IsNullOrWhiteSpace(since) && long.TryParse(since, out var requestedCursor))
+            {
+                lastSeen = Math.Max(lastSeen, requestedCursor);
+            }
             var deadline = DateTime.UtcNow.AddMilliseconds(Math.Clamp(waitMs, 0, 30000));
             List<ApiQueuedEvent> matched;
             do
             {
                 ExpireStaleSessionsLocked();
                 matched = _events
-                    .Where(e => e.Sequence > lastSeen && IsEventForSession(e, session!))
+                    .Where(e => e.Sequence > lastSeen && IsEventForSession(e, session))
                     .OrderBy(e => e.Sequence)
                     .ToList();
 
@@ -466,9 +475,11 @@ public sealed partial class SteamApiStateService
             }
             while (true);
 
+            var nextCursor = matched.Count == 0 ? lastSeen : matched.Max(e => e.Sequence);
+            session.EventCursor = nextCursor;
             return new ApiEventEnvelope
             {
-                Cursor = matched.Count == 0 ? lastSeen.ToString() : matched.Max(e => e.Sequence).ToString(),
+                Cursor = nextCursor.ToString(),
                 Events = matched.Select(e => CloneEvent(e.Event)).ToList()
             };
         }

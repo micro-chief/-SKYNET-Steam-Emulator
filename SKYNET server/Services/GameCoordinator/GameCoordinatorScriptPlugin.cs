@@ -11710,7 +11710,7 @@ internal sealed class ScriptExchangeHost
             ServerSteamId = U64Field(snapshot, "serverSteamId", "dotaRecordRealtimeStats.snapshot", _context.SteamId),
             MatchId = U64Field(snapshot, "matchId", "dotaRecordRealtimeStats.snapshot"),
             Timestamp = U32Field(snapshot, "timestamp", "dotaRecordRealtimeStats.snapshot"),
-            GameTime = U32Field(snapshot, "gameTime", "dotaRecordRealtimeStats.snapshot"),
+            GameTime = I32Field(snapshot, "gameTime", "dotaRecordRealtimeStats.snapshot"),
             GameState = U32Field(snapshot, "gameState", "dotaRecordRealtimeStats.snapshot"),
             GameMode = U32Field(snapshot, "gameMode", "dotaRecordRealtimeStats.snapshot"),
             LobbyType = U32Field(snapshot, "lobbyType", "dotaRecordRealtimeStats.snapshot"),
@@ -12921,6 +12921,28 @@ internal sealed class ScriptExchangeHost
 
         var fieldPath = $"{path}.{fieldName}";
         return CheckedToUInt32(ToNumber(field, fieldPath), fieldPath);
+    }
+
+    private static int I32Field(TsObject value, string fieldName, string path, int defaultValue = 0)
+    {
+        var field = value.GetField(fieldName);
+        if (field is TsNull or TsVoid)
+        {
+            return defaultValue;
+        }
+
+        var fieldPath = $"{path}.{fieldName}";
+        return CheckedToInt32(ToNumber(field, fieldPath), fieldPath);
+    }
+
+    private static int CheckedToInt32(double value, string path)
+    {
+        if (double.IsNaN(value) || value < int.MinValue || value > int.MaxValue)
+        {
+            throw new InvalidOperationException($"{path}: value {value} is outside Int32 range");
+        }
+
+        return Convert.ToInt32(value);
     }
 
     // Convert.ToUInt32(double) throws a bare OverflowException with no indication of

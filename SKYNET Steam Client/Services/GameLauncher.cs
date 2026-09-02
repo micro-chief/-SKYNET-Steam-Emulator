@@ -21,8 +21,8 @@ public sealed class LaunchResult
 }
 
 /// <summary>
-/// Launches a game with the SKYNET emulator injected into the process at start,
-/// with nothing written into the game folder. The game exe is created suspended,
+/// Launches a game with the SKYNET emulator resolved before Steam API calls begin.
+/// The game exe is created suspended,
 /// the emulator DLL shipped in the launcher's payload folder is copied to an
 /// isolated per-build shadow path and injected via
 /// CreateRemoteThread(LoadLibraryW), then the process is resumed. Because the game
@@ -33,8 +33,10 @@ public sealed class LaunchResult
 /// so rebuilding the client can refresh its bundled DLL while a launched game is
 /// still running.
 ///
-/// RecoverOrphans still runs on startup to clean up any DLL swap left by an older
-/// version of this launcher.
+/// Unreal delay-load plugins that insist on an absolute dependency path receive a
+/// private, temporary alias beside their original Steam DLL. The original file is
+/// never replaced, and the alias is marker-owned and removed on exit or recovery.
+/// RecoverOrphans also cleans up any DLL swap left by an older launcher version.
 /// </summary>
 public sealed class GameLauncher
 {
@@ -81,38 +83,190 @@ public sealed class GameLauncher
         }
 
         var steamImportName = Path.GetFileName(payload);
+        var delayImportNameRvas = PeImports.FindDelayImportNameRvas(game.ExecutablePath, steamImportName);
+        var hasDelaySteamImport = delayImportNameRvas.Count != 0;
         var hasStaticSteamImport = PeImports.ImportsModule(game.ExecutablePath, steamImportName);
         Process proc;
+        IReadOnlyList<string> stagedDelayAliases = Array.Empty<string>();
         try
         {
-            var workDir = string.IsNullOrWhiteSpace(game.ExeFolder) ? Path.GetDirectoryName(game.ExecutablePath)! : game.ExeFolder;
-            var insecureArg = !game.Ini.SecureNetworking &&
+            var workDir = ResolveWorkingDirectory(game);
+            // SecureNetworking controls the local SDR certificate path; it does
+            // not provide a Valve VAC session. SKYNET's Dota dedicated servers
+            // intentionally run with -insecure, so every Dota client must opt in
+            // to insecure game-server connections even when SDR is enabled.
+            var requiresInsecureClient = game.AppId == 570 || !game.Ini.SecureNetworking;
+            var insecureArg = requiresInsecureClient &&
                 !ContainsArgument(game.LaunchArguments, "-insecure") &&
                 !ContainsArgument(extraArgs, "-insecure")
                     ? "-insecure"
                     : null;
+            var unrealBootstrapProjectArg = ResolveUnrealBootstrapProjectArgument(game);
             var args = string.Join(" ",
-                new[] { game.LaunchArguments, insecureArg, extraArgs }
+                new[] { unrealBootstrapProjectArg, game.LaunchArguments, insecureArg, extraArgs }
                     .Where(a => !string.IsNullOrWhiteSpace(a)));
 
-            var injectablePayload = PrepareInjectablePayload(payload);
+            WriteLaunchDiagnostic(
+                $"launch exe={game.ExecutablePath} workingDirectory={workDir} " +
+                $"staticImport={hasStaticSteamImport} delayImport={hasDelaySteamImport} " +
+                $"bootstrapProjectArg={unrealBootstrapProjectArg ?? "<none>"} args={args}");
+
+            // Unreal delay-load hooks may resolve the original Steam DLL by its
+            // absolute plugin path before the regular delay helper runs. Load the
+            // payload under a short private alias, then rewrite the shared module-name
+            // string in the suspended image so both paths select the same module.
+            var delayImportAlias = hasDelaySteamImport
+                ? (arch == GameArch.X64 ? "skynet64.dll" : "skynet.dll")
+                : null;
+            var injectablePayload = PrepareInjectablePayload(payload, delayImportAlias);
+            if (delayImportAlias != null)
+            {
+                stagedDelayAliases = StageDelayImportAliases(
+                    workDir,
+                    steamImportName,
+                    delayImportAlias,
+                    injectablePayload,
+                    arch);
+                WriteLaunchDiagnostic(
+                    $"staged delay-import aliases: {string.Join("; ", stagedDelayAliases)}");
+            }
+            var stdoutLogPath = ContainsArgument(args, "-stdout")
+                ? Path.Combine(ConfigStore.RootDir, "game-stdout.log")
+                : null;
+            var effectiveAppId = game.CompatibilityAppId != 0
+                ? game.CompatibilityAppId
+                : game.AppId;
             proc = DllInjector.LaunchAndInject(
                 game.ExecutablePath,
                 injectablePayload,
                 args,
                 workDir,
-                hasStaticSteamImport ? steamImportName : null);
+                hasStaticSteamImport && !hasDelaySteamImport ? steamImportName : null,
+                hasDelaySteamImport ? steamImportName : null,
+                stdoutLogPath,
+                effectiveAppId);
             proc.EnableRaisingEvents = true;
-            proc.Exited += (_, _) => GameExited?.Invoke(game);
+            var processId = proc.Id;
+            proc.Exited += (_, _) =>
+            {
+                CleanupDelayImportAliases(stagedDelayAliases);
+                try
+                {
+                    WriteLaunchDiagnostic($"exit pid={processId} code={proc.ExitCode}");
+                }
+                catch (Exception ex)
+                {
+                    WriteLaunchDiagnostic($"exit pid={processId} code=<unavailable> error={ex.Message}");
+                }
+
+                GameExited?.Invoke(game);
+            };
+            WriteLaunchDiagnostic(
+                $"started pid={processId} payload={injectablePayload}" +
+                (stdoutLogPath == null ? string.Empty : $" stdout={stdoutLogPath}") +
+                $" SteamAppId={effectiveAppId} SteamGameId={effectiveAppId}");
             GameWindowActivator.BringToFrontWhenReady(proc);
         }
         catch (Exception ex)
         {
+            CleanupDelayImportAliases(stagedDelayAliases);
             return LaunchResult.Fail($"Failed to inject emulator into the game:\n{ex.Message}");
         }
 
         game.LastPlayedUtc = DateTimeOffset.UtcNow;
         return LaunchResult.Ok(proc, hasStaticSteamImport);
+    }
+
+    private static string ResolveWorkingDirectory(GameEntry game)
+    {
+        if (!string.IsNullOrWhiteSpace(game.WorkingDirectory))
+        {
+            var configured = Path.GetFullPath(game.WorkingDirectory);
+            if (Directory.Exists(configured))
+                return configured;
+        }
+
+        var exeFolder = game.ExeFolder;
+        if (string.IsNullOrWhiteSpace(exeFolder))
+            return Path.GetDirectoryName(game.ExecutablePath)!;
+
+        // Unreal's root bootstrap executable normally starts
+        // <Project>\Binaries\Win64\<Project>-Win64-Shipping.exe with the game
+        // root as its current directory. When the Shipping executable is selected
+        // directly for injection, preserve that launch environment.
+        var platformDirectory = new DirectoryInfo(exeFolder);
+        var binariesDirectory = platformDirectory.Parent;
+        var projectDirectory = binariesDirectory?.Parent;
+        var gameRoot = projectDirectory?.Parent;
+        var isUnrealPlatformDirectory =
+            string.Equals(platformDirectory.Name, "Win64", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(platformDirectory.Name, "Win32", StringComparison.OrdinalIgnoreCase);
+
+        if (isUnrealPlatformDirectory &&
+            string.Equals(binariesDirectory?.Name, "Binaries", StringComparison.OrdinalIgnoreCase) &&
+            projectDirectory != null &&
+            gameRoot != null &&
+            File.Exists(Path.Combine(gameRoot.FullName, projectDirectory.Name + ".exe")))
+        {
+            return gameRoot.FullName;
+        }
+
+        return exeFolder;
+    }
+
+    private static string? ResolveUnrealBootstrapProjectArgument(GameEntry game)
+    {
+        var platformDirectory = new DirectoryInfo(game.ExeFolder);
+        var binariesDirectory = platformDirectory.Parent;
+        var projectDirectory = binariesDirectory?.Parent;
+        var gameRoot = projectDirectory?.Parent;
+        if (projectDirectory == null || gameRoot == null ||
+            !string.Equals(binariesDirectory?.Name, "Binaries", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var platform = platformDirectory.Name;
+        if (!string.Equals(platform, "Win64", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(platform, "Win32", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var expectedShippingName = $"{projectDirectory.Name}-{platform}-Shipping";
+        if (!string.Equals(
+                Path.GetFileNameWithoutExtension(game.ExecutablePath),
+                expectedShippingName,
+                StringComparison.OrdinalIgnoreCase) ||
+            !File.Exists(Path.Combine(gameRoot.FullName, projectDirectory.Name + ".exe")))
+        {
+            return null;
+        }
+
+        // Unreal's packaged-game bootstrapper supplies the project name as argv[1].
+        // A directly injected Shipping executable must receive the same token or it
+        // can perform a clean early shutdown even after SteamAPI_Init succeeds.
+        var projectArgument = projectDirectory.Name;
+        if (ContainsArgument(game.LaunchArguments, projectArgument))
+            return null;
+
+        return projectArgument.Any(char.IsWhiteSpace)
+            ? $"\"{projectArgument.Replace("\"", "\\\"")}\""
+            : projectArgument;
+    }
+
+    private static void WriteLaunchDiagnostic(string message)
+    {
+        try
+        {
+            Directory.CreateDirectory(ConfigStore.RootDir);
+            File.AppendAllText(
+                Path.Combine(ConfigStore.RootDir, "launcher.log"),
+                $"{DateTimeOffset.Now:HH:mm:ss.fff}  {message}{Environment.NewLine}");
+        }
+        catch
+        {
+        }
     }
 
     private static bool ContainsArgument(string? arguments, string expected)
@@ -125,13 +279,15 @@ public sealed class GameLauncher
             .Any(argument => string.Equals(argument, expected, StringComparison.OrdinalIgnoreCase));
     }
 
-    private static string PrepareInjectablePayload(string payload)
+    private static string PrepareInjectablePayload(string payload, string? shadowFileName = null)
     {
         var payloadBytes = File.ReadAllBytes(payload);
         var hash = ComputePayloadHash(payloadBytes);
         var shadowRoot = Path.Combine(Path.GetTempPath(), "SKYNETSteamClient", "payload-shadow");
         var shadowDir = Path.Combine(shadowRoot, hash);
-        var payloadFileName = Path.GetFileName(payload);
+        var payloadFileName = string.IsNullOrWhiteSpace(shadowFileName)
+            ? Path.GetFileName(payload) ?? throw new InvalidOperationException("Payload file name is missing.")
+            : shadowFileName!;
         var shadowPath = Path.Combine(shadowDir, payloadFileName);
 
         Directory.CreateDirectory(shadowDir);
@@ -169,6 +325,54 @@ public sealed class GameLauncher
         using var sha256 = SHA256.Create();
         var hashBytes = sha256.ComputeHash(payloadBytes);
         return BitConverter.ToString(hashBytes).Replace("-", string.Empty).ToLowerInvariant();
+    }
+
+    private static IReadOnlyList<string> StageDelayImportAliases(
+        string searchRoot,
+        string originalModuleName,
+        string aliasModuleName,
+        string payloadPath,
+        GameArch targetArch)
+    {
+        var staged = new List<string>();
+        try
+        {
+            var originalDlls = Directory
+                .EnumerateFiles(searchRoot, originalModuleName, SearchOption.AllDirectories)
+                .Where(path => PeArch.Detect(path) == targetArch)
+                .ToArray();
+            if (originalDlls.Length == 0)
+                throw new FileNotFoundException(
+                    $"No '{originalModuleName}' dependency was found below '{searchRoot}' for delay-load aliasing.");
+
+            foreach (var originalDll in originalDlls)
+            {
+                var aliasPath = Path.Combine(Path.GetDirectoryName(originalDll)!, aliasModuleName);
+                var markerPath = aliasPath + MarkerSuffix;
+                if (File.Exists(aliasPath) && !File.Exists(markerPath))
+                    throw new IOException($"Delay-load alias already exists and is not owned by SKYNET: {aliasPath}");
+
+                TryRestore(aliasPath);
+                File.WriteAllText(markerPath, Path.GetFileName(payloadPath));
+                File.Copy(payloadPath, aliasPath, overwrite: false);
+                staged.Add(aliasPath);
+            }
+
+            return staged;
+        }
+        catch
+        {
+            CleanupDelayImportAliases(staged);
+            throw;
+        }
+    }
+
+    private static void CleanupDelayImportAliases(IEnumerable<string> aliases)
+    {
+        foreach (var aliasPath in aliases)
+        {
+            TryRestore(aliasPath);
+        }
     }
 
     private static void CleanupPayloadShadows(string shadowRoot, string activeHash, string payloadFileName)
@@ -242,6 +446,21 @@ public sealed class GameLauncher
                 var target = Path.Combine(game.ExeFolder, name);
                 if (File.Exists(target + MarkerSuffix) || File.Exists(target + BackupSuffix))
                     TryRestore(target);
+            }
+
+            try
+            {
+                var searchRoot = ResolveWorkingDirectory(game);
+                foreach (var marker in Directory.EnumerateFiles(
+                    searchRoot,
+                    $"skynet*.dll{MarkerSuffix}",
+                    SearchOption.AllDirectories))
+                {
+                    TryRestore(marker.Substring(0, marker.Length - MarkerSuffix.Length));
+                }
+            }
+            catch
+            {
             }
         }
     }

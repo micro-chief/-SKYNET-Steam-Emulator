@@ -89,6 +89,7 @@
                     <CheckBox x:Name="CUnlockDlc" Content="Unlock all DLC" />
                     <CheckBox x:Name="CInventory" Content="Enable inventory" />
                     <CheckBox x:Name="CLogFile" Content="Write log file" />
+                    <CheckBox x:Name="CTraceInterfaces" Content="Trace Steamworks calls (first 10 seconds)" />
                 </StackPanel>
             </ScrollViewer>
 

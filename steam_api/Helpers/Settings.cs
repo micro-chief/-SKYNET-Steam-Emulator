@@ -109,6 +109,7 @@ namespace SKYNET.Helper
                     config.AppendLine("[Log Settings]");
                     config.AppendLine("File = false");
                     config.AppendLine("Console = false");
+                    config.AppendLine("TraceInterfaces = false");
                     config.AppendLine();
 
                     File.WriteAllText(fileName, config.ToString());
@@ -121,6 +122,7 @@ namespace SKYNET.Helper
                 SteamEmulator.LogToFile = SteamEmulator.SendLog;
                 SteamEmulator.ConsoleLog = GetBool("Log Settings", "Console", false);
                 SteamEmulator.LogToConsole = SteamEmulator.ConsoleLog;
+                SteamEmulator.TraceInterfaces = GetBool("Log Settings", "TraceInterfaces", false);
 
                 SteamEmulator.PersonaName = GetString("User Settings", "FallbackPersonaName", Environment.UserName);
                 SteamEmulator.Language = (string)IniParser["Game Settings"]["Languaje"];
@@ -283,6 +285,7 @@ namespace SKYNET.Helper
             changed |= EnsureSetting("Workshop", "ContentRoot", string.Empty);
             changed |= EnsureSetting("Music", "Enabled", "true");
             changed |= EnsureSetting("Music", "LibraryRoot", string.Empty);
+            changed |= EnsureSetting("Log Settings", "TraceInterfaces", "false");
             changed |= MigrateSetting("Network Settings", "PollIntervalMs", "1000", "50");
             changed |= MigrateSetting("Network Settings", "HttpTimeoutMs", "2000", "8000");
             changed |= MigrateSetting("Network Settings", "BroadCastPort", "28025", "28032");

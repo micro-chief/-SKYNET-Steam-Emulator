@@ -37,6 +37,7 @@ public partial class GameSettingsWindow : Window
         CUnlockDlc.IsChecked = s.UnlockAllDlc;
         CInventory.IsChecked = s.InventoryEnabled;
         CLogFile.IsChecked = s.LogToFile;
+        CTraceInterfaces.IsChecked = s.TraceInterfaces;
     }
 
     private bool Apply()
@@ -69,6 +70,7 @@ public partial class GameSettingsWindow : Window
         s.UnlockAllDlc = CUnlockDlc.IsChecked == true;
         s.InventoryEnabled = CInventory.IsChecked == true;
         s.LogToFile = CLogFile.IsChecked == true;
+        s.TraceInterfaces = CTraceInterfaces.IsChecked == true;
         return true;
     }
 

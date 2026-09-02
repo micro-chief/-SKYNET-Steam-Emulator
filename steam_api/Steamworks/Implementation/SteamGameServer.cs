@@ -18,6 +18,7 @@ namespace SKYNET.Steamworks.Implementation
         public static SteamGameServer Instance;
 
         public GameServerData ServerData;
+        public volatile bool ApiInitialized;
         public volatile bool LoggedIn;
         private readonly object _heartbeatGate = new object();
         private Timer _heartbeatTimer;
@@ -77,6 +78,7 @@ namespace SKYNET.Steamworks.Implementation
             ServerData.VersionString = pchVersionString;
             ServerData.SteamId = (ulong)SteamEmulator.SteamID_GS;
             ServerData.LoggedOn = false;
+            ApiInitialized = true;
 
             var lobby = LobbyManager.GetLobbyByOwner((ulong)SteamEmulator.SteamID);
             if (lobby != null)
@@ -735,6 +737,7 @@ namespace SKYNET.Steamworks.Implementation
             }
 
             ServerData.Players.Clear();
+            ApiInitialized = false;
             _logOnToken = string.Empty;
             _anonymousLogOn = true;
             SteamEmulator.SteamID_GS = CSteamID.CreateOne(true);

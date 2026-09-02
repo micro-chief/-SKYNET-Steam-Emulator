@@ -9,21 +9,21 @@ namespace SKYNET_server.Services.Mcp;
 /// AI/dev tooling can inspect live server state without a separate service or a
 /// duplicated copy of SteamApiStateService's in-memory state (see discussion #36).
 ///
-/// Every tool takes the same admin bearer token used by the existing /api/admin/*
-/// endpoints and is gated the same way (SteamApiStateService.IsWebAdmin) - MCP is
-/// a new transport for the existing admin-only read surface, not a new trust
-/// boundary. No tool here mutates state.
+/// The /mcp transport accepts the same admin session through the HTTP
+/// Authorization: Bearer header used by the existing /api/admin/* endpoints.
+/// Tools also verify that request-scoped identity before reading state. The
+/// secret is deliberately absent from tool arguments and schemas. No tool here
+/// mutates state.
 /// </summary>
 [McpServerToolType]
 public sealed class SkynetDiagnosticsMcpTools
 {
-    private const string Unauthorized = "Unauthorized: provide a valid admin session token.";
+    private const string Unauthorized = "Unauthorized: send a valid admin session token in the Authorization: Bearer header.";
 
     [McpServerTool, Description("Lists the games configured for the Game Coordinator bridge (AppID, display name, entry point, host services).")]
-    public static object ListGames(SteamApiStateService state, GameCoordinatorScriptPlugin gc, GameCatalogService catalog,
-        [Description("Admin session/bearer token")] string token)
+    public static object ListGames(McpAdminAuthorization authorization, GameCoordinatorScriptPlugin gc, GameCatalogService catalog)
     {
-        if (!state.IsWebAdmin(token)) return Unauthorized;
+        if (!authorization.IsAuthorized) return Unauthorized;
 
         return gc.ListApps().Select(app => new
         {
@@ -35,11 +35,10 @@ public sealed class SkynetDiagnosticsMcpTools
     }
 
     [McpServerTool, Description("Looks up a registered user by SteamID64.")]
-    public static object GetUser(SteamApiStateService state,
-        [Description("Admin session/bearer token")] string token,
+    public static object GetUser(McpAdminAuthorization authorization,
         [Description("SteamID64 of the user to look up")] ulong steamId)
     {
-        var overview = state.GetAdminOverviewForSession(token);
+        var overview = authorization.GetAdminOverview();
         if (overview == null) return Unauthorized;
 
         var user = overview.Users.FirstOrDefault(u => u.SteamId == steamId);
@@ -47,11 +46,10 @@ public sealed class SkynetDiagnosticsMcpTools
     }
 
     [McpServerTool, Description("Reports whether a given AppID has a valid Game Coordinator app configured, plus recent trace activity for it.")]
-    public static object GetGcStatus(SteamApiStateService state, GameCoordinatorScriptPlugin gc, GameCoordinatorTraceService trace,
-        [Description("Admin session/bearer token")] string token,
+    public static object GetGcStatus(McpAdminAuthorization authorization, GameCoordinatorScriptPlugin gc, GameCoordinatorTraceService trace,
         [Description("Steam AppID")] uint appId)
     {
-        if (!state.IsWebAdmin(token)) return Unauthorized;
+        if (!authorization.IsAuthorized) return Unauthorized;
 
         var configured = gc.TryGetApp(appId, out var app);
         var recent = trace.GetSince(0).Where(e => e.AppId == appId).ToList();
@@ -69,10 +67,9 @@ public sealed class SkynetDiagnosticsMcpTools
     }
 
     [McpServerTool, Description("Lists the Game Coordinator routing table: which AppIDs are wired up, their entry script, host services, and proto contract sources.")]
-    public static object GetGcRoutes(SteamApiStateService state, GameCoordinatorScriptPlugin gc,
-        [Description("Admin session/bearer token")] string token)
+    public static object GetGcRoutes(McpAdminAuthorization authorization, GameCoordinatorScriptPlugin gc)
     {
-        if (!state.IsWebAdmin(token)) return Unauthorized;
+        if (!authorization.IsAuthorized) return Unauthorized;
 
         return gc.ListApps().Select(app => new
         {
@@ -85,12 +82,11 @@ public sealed class SkynetDiagnosticsMcpTools
     }
 
     [McpServerTool, Description("Returns the most recent Game Coordinator messages that no plugin handled, optionally filtered by AppID.")]
-    public static object GetGcUnhandledMessages(SteamApiStateService state, GameCoordinatorTraceService trace,
-        [Description("Admin session/bearer token")] string token,
+    public static object GetGcUnhandledMessages(McpAdminAuthorization authorization, GameCoordinatorTraceService trace,
         [Description("Optional AppID filter")] uint? appId = null,
         [Description("Maximum entries to return (default 50)")] int limit = 50)
     {
-        if (!state.IsWebAdmin(token)) return Unauthorized;
+        if (!authorization.IsAuthorized) return Unauthorized;
 
         return trace.GetSince(0)
             .Where(e => e.Kind == "unhandled" && (appId == null || e.AppId == appId))
@@ -100,12 +96,11 @@ public sealed class SkynetDiagnosticsMcpTools
     }
 
     [McpServerTool, Description("Returns the most recent Game Coordinator trace entries (in/out/error/unhandled), optionally filtered by AppID.")]
-    public static object GetRecentGcMessages(SteamApiStateService state, GameCoordinatorTraceService trace,
-        [Description("Admin session/bearer token")] string token,
+    public static object GetRecentGcMessages(McpAdminAuthorization authorization, GameCoordinatorTraceService trace,
         [Description("Optional AppID filter")] uint? appId = null,
         [Description("Maximum entries to return (default 50)")] int limit = 50)
     {
-        if (!state.IsWebAdmin(token)) return Unauthorized;
+        if (!authorization.IsAuthorized) return Unauthorized;
 
         return trace.GetSince(0)
             .Where(e => appId == null || e.AppId == appId)
@@ -115,11 +110,10 @@ public sealed class SkynetDiagnosticsMcpTools
     }
 
     [McpServerTool, Description("Lists currently registered game servers, optionally filtered by AppID.")]
-    public static object ListGameServers(SteamApiStateService state,
-        [Description("Admin session/bearer token")] string token,
+    public static object ListGameServers(McpAdminAuthorization authorization,
         [Description("Optional AppID filter")] uint? appId = null)
     {
-        var overview = state.GetAdminOverviewForSession(token);
+        var overview = authorization.GetAdminOverview();
         if (overview == null) return Unauthorized;
 
         return overview.GameServers
@@ -128,11 +122,10 @@ public sealed class SkynetDiagnosticsMcpTools
     }
 
     [McpServerTool, Description("Returns the most recent SKYNET server application log lines.")]
-    public static object GetServerLogs(SteamApiStateService state, InMemoryLogBufferProvider logs,
-        [Description("Admin session/bearer token")] string token,
+    public static object GetServerLogs(McpAdminAuthorization authorization, InMemoryLogBufferProvider logs,
         [Description("Maximum lines to return (default 100)")] int count = 100)
     {
-        if (!state.IsWebAdmin(token)) return Unauthorized;
+        if (!authorization.IsAuthorized) return Unauthorized;
 
         return logs.GetRecent(Math.Clamp(count, 1, 500));
     }

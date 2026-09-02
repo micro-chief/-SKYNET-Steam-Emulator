@@ -217,6 +217,28 @@ Default server URL:
 http://127.0.0.1:27080/
 ```
 
+### MCP diagnostics in Codex
+
+The server exposes read-only admin diagnostics over Streamable HTTP at
+`http://127.0.0.1:27080/mcp`. This is a protocol endpoint, not a web page: a
+normal browser `GET` returning `405 Method Not Allowed` is expected.
+
+Configure Codex without putting the admin session token in this repository or
+in a tool call:
+
+```toml
+[mcp_servers.skynet-diagnostics]
+url = "http://127.0.0.1:27080/mcp"
+bearer_token_env_var = "SKYNET_ADMIN_TOKEN"
+```
+
+Create the `SKYNET_ADMIN_TOKEN` user environment variable through the Windows
+Environment Variables dialog and paste the admin web-session token as its
+value. Fully exit and reopen Codex after creating or changing the variable.
+Restart SKYNET server after rebuilding it. Codex will then send the token in
+the HTTP `Authorization: Bearer` header; it does not appear in MCP tool
+arguments or their schemas.
+
 ### Build the web UI CSS
 
 The committed CSS is enough for normal builds. Rebuild it only when changing Tailwind classes or UI styling:

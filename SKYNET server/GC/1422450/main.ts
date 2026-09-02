@@ -10,7 +10,6 @@ import {
     requestDeadlockPartyLeave
 } from "./modules/RequestDeadlockPartyLeave";
 import {
-    RequestDeadlockPartyActionRoute,
     requestDeadlockPartyAction
 } from "./modules/RequestDeadlockPartyAction";
 import {
@@ -128,6 +127,9 @@ gc.onMessage(Msg.DeadlockMatchSignout, () =>
     requestDeadlockMatchSignoutRaw());
 gc.onMessage(Msg.DeadlockUpdateLobbyServerState, () =>
     requestDeadlockUpdateLobbyServerStateRaw());
+// One-way dedicated-server telemetry. The GC currently has no live match-info
+// consumer, but acknowledging the route keeps valid traffic out of unhandled logs.
+gc.onMessage(Msg.DeadlockServerUpdateMatchInfo, () => true);
 gc.onMessage(Msg.DeadlockServerEnterMatchmaking, () =>
     requestDeadlockServerEnterMatchmakingRaw());
 gc.onMessage(Msg.DeadlockLeaveLobby, () =>

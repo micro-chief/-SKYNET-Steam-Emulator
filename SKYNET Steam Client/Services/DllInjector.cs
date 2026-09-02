@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Collections;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -22,7 +23,7 @@ public static class DllInjector
     /// <summary>
     /// Launches a game with the payload resolved before Steam API calls begin. Dynamic
     /// consumers remain suspended while the payload is injected. Static import
-    /// consumers have their import descriptor rebound before Windows starts loading
+    /// consumers have their direct or delay-load import descriptor rebound before Windows starts loading
     /// the initial image, avoiding a loader race and any game-folder replacement.
     /// </summary>
     public static Process LaunchAndInject(
@@ -30,7 +31,10 @@ public static class DllInjector
         string dllPath,
         string arguments,
         string workingDir,
-        string? staticImportModuleName = null)
+        string? staticImportModuleName = null,
+        string? delayImportModuleName = null,
+        string? outputLogPath = null,
+        uint steamAppId = 0)
     {
         if (!File.Exists(exePath)) throw new FileNotFoundException("Executable not found", exePath);
         if (!File.Exists(dllPath)) throw new FileNotFoundException("Injection DLL not found", dllPath);
@@ -47,8 +51,13 @@ public static class DllInjector
             throw new InvalidOperationException("An x64 game requires the launcher to run as a 64-bit process.");
 
         var rebindsStaticImport = !string.IsNullOrWhiteSpace(staticImportModuleName);
-        if (targetArch == GameArch.X86 && IntPtr.Size == 8 && !rebindsStaticImport)
-            return LaunchThroughX86Helper(exePath, dllPath, arguments, workingDir);
+        var rebindsDelayImport = !string.IsNullOrWhiteSpace(delayImportModuleName);
+        if (rebindsStaticImport && rebindsDelayImport)
+            throw new InvalidOperationException("Direct and delay-import redirection modes cannot be combined.");
+        if (targetArch == GameArch.X86 && IntPtr.Size == 8 && !rebindsStaticImport && !rebindsDelayImport)
+            return LaunchThroughX86Helper(exePath, dllPath, arguments, workingDir, steamAppId);
+        if (targetArch == GameArch.X86 && IntPtr.Size == 8 && rebindsDelayImport)
+            throw new InvalidOperationException("Delay-import alias redirection currently requires a launcher matching the x86 target architecture.");
 
         var si = new STARTUPINFO
         {
@@ -58,20 +67,84 @@ public static class DllInjector
         };
         var pi = new PROCESS_INFORMATION();
 
+        FileStream? outputStream = null;
+        if (!string.IsNullOrWhiteSpace(outputLogPath))
+        {
+            var outputDirectory = Path.GetDirectoryName(outputLogPath);
+            if (!string.IsNullOrWhiteSpace(outputDirectory))
+                Directory.CreateDirectory(outputDirectory);
+
+            outputStream = new FileStream(outputLogPath, FileMode.Create, FileAccess.Write, FileShare.ReadWrite);
+            var outputHandle = outputStream.SafeFileHandle.DangerousGetHandle();
+            if (!SetHandleInformation(outputHandle, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT))
+            {
+                outputStream.Dispose();
+                throw new Win32Exception(Marshal.GetLastWin32Error(), "SetHandleInformation(stdout) failed");
+            }
+
+            si.dwFlags |= STARTF_USESTDHANDLES;
+            si.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
+            si.hStdOutput = outputHandle;
+            si.hStdError = outputHandle;
+        }
+
         // CreateProcess wants a mutable command line; arg0 should be the exe.
         string cmdLine = $"\"{exePath}\" {arguments}".Trim();
         var cmd = new StringBuilder(cmdLine, Math.Max(cmdLine.Length + 1, 260));
 
         const uint CREATE_SUSPENDED = 0x00000004;
         var creationFlags = CREATE_SUSPENDED;
-        if (!CreateProcess(exePath, cmd, IntPtr.Zero, IntPtr.Zero, false,
-                creationFlags, IntPtr.Zero, workingDir, ref si, out pi))
+        IntPtr environmentBlock = IntPtr.Zero;
+        if (steamAppId != 0)
         {
+            environmentBlock = BuildEnvironmentBlock(steamAppId);
+            creationFlags |= CREATE_UNICODE_ENVIRONMENT;
+        }
+
+        if (!CreateProcess(exePath, cmd, IntPtr.Zero, IntPtr.Zero, outputStream != null,
+                creationFlags, environmentBlock, workingDir, ref si, out pi))
+        {
+            outputStream?.Dispose();
+            if (environmentBlock != IntPtr.Zero)
+                Marshal.FreeHGlobal(environmentBlock);
             throw new Win32Exception(Marshal.GetLastWin32Error(), "CreateProcess failed");
         }
 
+        // CreateProcess duplicated inheritable handles into the child. Closing the
+        // launcher's copy lets readers observe EOF as soon as the game exits.
+        outputStream?.Dispose();
+        if (environmentBlock != IntPtr.Zero)
+            Marshal.FreeHGlobal(environmentBlock);
+
         try
         {
+            if (steamAppId == 2406770)
+            {
+                SteamStaticImportRebinder.TagBodycamPreInitExitCodes(pi.hProcess, exePath);
+                SteamStaticImportRebinder.StartBodycamPatchPersistenceMonitor(
+                    pi.hProcess,
+                    pi.dwThreadId,
+                    exePath,
+                    Path.Combine(ConfigStore.RootDir, "bodycam-patch-persistence.log"));
+            }
+
+            if (rebindsDelayImport)
+            {
+                // Unreal's preload hook must be the single owner of this load. The
+                // launcher stages dllPath under its private alias in the plugin's
+                // dependency directory; pre-injecting a second Temp copy would map
+                // the managed payload twice and split Steam API state.
+                SteamStaticImportRebinder.RebindDelayModuleName(
+                    pi.hProcess,
+                    exePath,
+                    delayImportModuleName!,
+                    Path.GetFileName(dllPath));
+                AllowSetForegroundWindow(pi.dwProcessId);
+                if (ResumeThread(pi.hThread) == unchecked((uint)-1))
+                    throw new Win32Exception(Marshal.GetLastWin32Error(), "ResumeThread failed");
+                return Process.GetProcessById((int)pi.dwProcessId);
+            }
+
             if (rebindsStaticImport)
             {
                 var process = Process.GetProcessById((int)pi.dwProcessId);
@@ -105,7 +178,8 @@ public static class DllInjector
         string exePath,
         string dllPath,
         string arguments,
-        string workingDir)
+        string workingDir,
+        uint steamAppId)
     {
         var helperPath = Path.Combine(AppContext.BaseDirectory, "helpers", "x86", "SKYNET Injector Helper.exe");
         if (!File.Exists(helperPath))
@@ -132,6 +206,14 @@ public static class DllInjector
             RedirectStandardOutput = true,
             RedirectStandardError = true
         };
+        if (steamAppId != 0)
+        {
+            var appId = steamAppId.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            startInfo.EnvironmentVariables["SteamAppId"] = appId;
+            startInfo.EnvironmentVariables["SteamGameId"] = appId;
+            startInfo.EnvironmentVariables["SteamClientLaunch"] = "1";
+            startInfo.EnvironmentVariables["SteamEnv"] = "1";
+        }
 
         using var helper = Process.Start(startInfo)
             ?? throw new InvalidOperationException("Could not start the x86 injector helper.");
@@ -155,6 +237,32 @@ public static class DllInjector
 
         AllowSetForegroundWindow(processId);
         return Process.GetProcessById((int)processId);
+    }
+
+    private static IntPtr BuildEnvironmentBlock(uint steamAppId)
+    {
+        var variables = new SortedDictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (DictionaryEntry entry in Environment.GetEnvironmentVariables())
+        {
+            var name = entry.Key?.ToString();
+            if (name is { Length: > 0 })
+                variables[name] = entry.Value?.ToString() ?? string.Empty;
+        }
+
+        var appId = steamAppId.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        variables["SteamAppId"] = appId;
+        variables["SteamGameId"] = appId;
+        // Match the process markers set by an ordinary launch from the Steam
+        // client. Some shipping builds perform this bootstrap check outside of
+        // steam_api before their OnlineSubsystem has finished initializing.
+        variables["SteamClientLaunch"] = "1";
+        variables["SteamEnv"] = "1";
+
+        var block = new StringBuilder();
+        foreach (var variable in variables)
+            block.Append(variable.Key).Append('=').Append(variable.Value).Append('\0');
+        block.Append('\0');
+        return Marshal.StringToHGlobalUni(block.ToString());
     }
 
     private static void InjectInto(IntPtr hProcess, string dllPath)
@@ -230,12 +338,22 @@ public static class DllInjector
     }
 
     private const int STARTF_USESHOWWINDOW = 0x00000001;
+    private const int STARTF_USESTDHANDLES = 0x00000100;
+    private const uint CREATE_UNICODE_ENVIRONMENT = 0x00000400;
+    private const uint HANDLE_FLAG_INHERIT = 0x00000001;
+    private const int STD_INPUT_HANDLE = -10;
     private const short SW_SHOWNORMAL = 1;
 
     [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
     private static extern bool CreateProcess(string? lpApplicationName, StringBuilder lpCommandLine,
         IntPtr lpProcessAttributes, IntPtr lpThreadAttributes, bool bInheritHandles, uint dwCreationFlags,
         IntPtr lpEnvironment, string? lpCurrentDirectory, ref STARTUPINFO lpStartupInfo, out PROCESS_INFORMATION lpProcessInformation);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool SetHandleInformation(IntPtr hObject, uint dwMask, uint dwFlags);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern IntPtr GetStdHandle(int nStdHandle);
 
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern uint ResumeThread(IntPtr hThread);
